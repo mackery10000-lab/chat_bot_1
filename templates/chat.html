@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ko">
+<head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+ <title>{{ bot.name }}</title>
+ <link rel="icon" href="data:,">
+ <link rel="preload" as="image" href="{{ asset_url('assets/images/ui/dialogue-paper.png') }}">
+ <link rel="preload" as="image" href="{{ asset_url('assets/images/ui/chat-input.png') }}">
+ <link rel="preload" as="image" href="{{ asset_url('assets/images/ui/choice-paper.png') }}">
+ <link rel="preload" as="image" href="{{ asset_url('assets/images/ui/hint-paper.png') }}">
+ <link rel="preload" as="image" href="{{ asset_url('assets/images/inventory/book-overview.png') }}">
+ <link rel="preload" as="image" href="{{ asset_url('assets/images/inventory/book-detail.png') }}">
+ <link rel="preload" as="image" href="{{ asset_url('assets/images/inventory/photo-mount.png') }}">
+ <link rel="stylesheet" href="{{ asset_url('assets/css/style.css') }}">
+ <link rel="stylesheet" href="{{ asset_url('assets/css/inventory.css') }}">
+ <script src="{{ asset_url('assets/js/audio.js') }}" defer></script>
+ <script src="{{ asset_url('assets/js/puzzles.js') }}" defer></script>
+ <script src="{{ asset_url('assets/js/chatbot.js') }}" defer></script>
+</head>
+<body class="chat-page game-booting">
+
+<header class="game-header">
+ <a href="{{ url_for('index') }}" class="game-brand" aria-label="처음으로">13-Fri <span>운행 종료 불가</span></a>
+ <div class="header-right"><span class="save-status" id="save-status">기록 불러오는 중</span><button type="button" id="settings-btn" class="text-button">설정</button></div>
+</header>
+
+<main class="game-shell chat-area" data-username="{{ username }}">
+ <nav class="train-map-bar" aria-label="열차 미니맵">
+  <div class="map-heading"><span class="map-direction">← 열차 후방</span><span class="map-caption">열차 안내도 <small>13-FRI · NIGHT EXPRESS</small></span><span class="map-direction">열차 전방 →</span></div>
+  <div id="train-map" class="linear-map"></div>
+ </nav>
+
+ <section class="scene-frame" aria-label="현재 열차 장면">
+  <div class="scene-world" id="scene-world" style="aspect-ratio:1402/1122">
+   <img id="scene-image" class="scene-background" src="{{ asset_url('assets/images/car1/background.png') }}" alt="낡은 목재 객차">
+   <div class="scene-shade"></div>
+   <div id="scene-hotspots" class="scene-hotspots"></div>
+   <div class="character-layer" id="character-layer"></div>
+   <div class="darkness" id="darkness" hidden></div>
+   <div id="location-notice" class="location-notice" role="status" aria-live="polite" hidden><span id="location-name"></span></div>
+
+   <div class="scene-top">
+    <div class="scene-location-tools">
+     <button type="button" id="menu-btn" class="scene-menu" aria-label="메뉴 열기" aria-haspopup="dialog"><img class="ui-art" src="{{ asset_url('assets/images/ui/menu-card.png') }}" alt="" draggable="false"></button>
+    </div>
+    <nav class="scene-tools" aria-label="조사 도구">
+     <button type="button" id="bag-btn" title="보관함" aria-label="보관함" aria-haspopup="dialog"><img class="ui-art" src="{{ asset_url('assets/images/ui/inventory-card.png') }}" alt="" draggable="false"><i id="item-count">1</i></button>
+     <button type="button" id="history-btn" title="대화 기록" aria-label="대화 기록" aria-haspopup="dialog"><img class="ui-art" src="{{ asset_url('assets/images/ui/journal-card.png') }}" alt="" draggable="false"></button>
+     <button type="button" id="hint-btn" title="힌트" aria-label="힌트 요청" aria-controls="hint-panel" aria-expanded="false"><img class="ui-art" src="{{ asset_url('assets/images/ui/hint-card.png') }}" alt="" draggable="false"></button>
+    </nav>
+   </div>
+
+   <p id="scene-caption" class="scene-caption"></p>
+   <div id="scene-actions" hidden></div>
+   <div class="conversation-badge" id="conversation-badge" hidden><span id="active-person"></span><button id="end-talk" type="button" data-busy-control>대화 마치기 · 주변 보기</button></div>
+   <p id="interaction-guide" class="interaction-guide">빛나는 지점에 커서를 올려 대상을 확인하세요. 채팅으로도 조사할 수 있습니다.</p>
+  </div>
+
+  <div class="dialogue-box" id="dialogue-box" role="region" aria-label="대화 및 조사 내용" hidden>
+   <div class="speaker-tab" id="speaker-name">차내</div>
+   <button type="button" id="close-dialogue" class="dialogue-close" aria-label="대화창 닫기" title="대화창 닫기 · Esc">×</button>
+   <div id="dialogue-text" class="dialogue-text" aria-live="polite"></div>
+  </div>
+ </section>
+
+ <section class="conversation-console" aria-label="힌트와 자유 채팅">
+  <div class="console-main">
+   <section id="hints-and-choices" class="hints-and-choices" aria-label="행동 선택지와 요청한 힌트">
+    <div id="choice-list" class="choice-list" aria-label="선택지" hidden></div>
+    <div id="hint-panel" class="hint-panel" hidden><button id="hint-choice" type="button" class="choice-button hint-choice" data-busy-control data-locked="1" disabled><span id="hint-title" class="hint-title"></span><span id="hint-text" class="hint-text" aria-live="polite"></span></button></div>
+   </section>
+   <form id="chat-form" class="chat-input-area">
+    <label class="visually-hidden" for="user-message">직접 대화하거나 행동을 입력하세요</label>
+    <textarea id="user-message" rows="1" maxlength="2000" placeholder="직접 입력할 수 있습니다…" autocomplete="off" required></textarea>
+    <button id="send-btn" type="submit" class="send-button" aria-label="메시지 보내기"></button>
+   </form>
+  </div>
+  <div class="input-meta"><span id="current-target">현재 장면에 행동하기</span><span id="reply-status" role="status"></span><span>Enter 전송 · Shift+Enter 줄바꿈</span></div>
+  <div class="error-banner" id="error-banner" role="alert" hidden><span id="error-text"></span><button type="button" id="retry-btn">다시 시도</button><button type="button" id="reload-btn">기록 불러오기</button></div>
+ </section>
+</main>
+
+<dialog id="cinematic" class="cinematic-dialog" aria-labelledby="cinematic-title" aria-describedby="cinematic-status">
+ <h2 id="cinematic-title" class="visually-hidden">오프닝</h2>
+ <video id="cinematic-video" autoplay playsinline preload="auto" tabindex="-1" disablepictureinpicture disableremoteplayback controlslist="nodownload nofullscreen noremoteplayback noplaybackrate"></video>
+ <p id="cinematic-status" class="visually-hidden" role="status" aria-live="polite"></p>
+</dialog>
+
+<dialog id="overlay" class="game-dialog" aria-labelledby="overlay-title">
+ <header class="overlay-header"><div><span class="eyebrow" id="overlay-eyebrow">13-Fri</span><h2 id="overlay-title">보관함</h2></div><button type="button" id="close-overlay" class="close-button" aria-label="창 닫기">×</button></header>
+ <div id="overlay-body"></div>
+</dialog>
+<div id="acquisition-notice" class="acquisition-notice" role="status" aria-live="polite" hidden></div>
+<div id="toast" class="toast" role="status" hidden></div>
+<div id="scene-loading" class="scene-loading" role="status" aria-live="polite" aria-label="장면 로딩" hidden>
+ <div class="loading-center"><img class="loading-train" src="{{ asset_url('assets/images/ui/train-route-six-cars.png') }}" alt=""><span>로딩</span></div>
+</div>
+</body>
+</html>

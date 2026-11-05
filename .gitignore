@@ -1,0 +1,51 @@
+.env
+.env.*
+!.env.example
+.vercel/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.local/
+runtime/
+dist/
+*.sqlite3
+
+# 분석용으로 내려받은 이전 기수 저장소와 내부 작업 메모
+reference-3/
+reference-4/
+BASELINE_REVIEW.md
+IMPLEMENTATION_PLAN.md
+CHANGE_REPORT.md
+
+# SQLite 실행 중 보조 파일
+*.sqlite3-wal
+*.sqlite3-shm
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+secrets.json
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Temporary files
+*.log
+.DS_Store
+Thumbs.db
+node_modules/
+
