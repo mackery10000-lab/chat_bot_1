@@ -9,6 +9,7 @@
  <link rel="preload" as="image" href="{{ asset_url('assets/images/ui/chat-input.png') }}">
  <link rel="preload" as="image" href="{{ asset_url('assets/images/ui/choice-paper.png') }}">
  <link rel="preload" as="image" href="{{ asset_url('assets/images/ui/hint-paper.png') }}">
+ <link rel="preload" as="image" href="{{ asset_url('assets/images/ui/train-route-lights-off.webp') }}">
  <link rel="preload" as="image" href="{{ asset_url('assets/images/inventory/book-overview.png') }}">
  <link rel="preload" as="image" href="{{ asset_url('assets/images/inventory/book-detail.png') }}">
  <link rel="preload" as="image" href="{{ asset_url('assets/images/inventory/photo-mount.png') }}">
@@ -27,8 +28,13 @@
 
 <main class="game-shell chat-area" data-username="{{ username }}">
  <nav class="train-map-bar" aria-label="열차 미니맵">
-  <div class="map-heading"><span class="map-direction">← 열차 후방</span><span class="map-caption">열차 안내도 <small>13-FRI · NIGHT EXPRESS</small></span><span class="map-direction">열차 전방 →</span></div>
-  <div id="train-map" class="linear-map"></div>
+  <button type="button" id="map-toggle" class="map-toggle" aria-controls="train-map-panel" aria-expanded="true">열차 안내도 접기</button>
+  <div id="train-map-panel" class="train-map-panel">
+   <div class="train-map-sheet">
+    <div class="map-heading"><span class="map-direction">← 열차 후방</span><span class="map-caption">열차 안내도 <small>13-FRI · NIGHT EXPRESS</small></span><span class="map-direction">열차 전방 →</span></div>
+    <div id="train-map" class="linear-map"></div>
+   </div>
+  </div>
  </nav>
 
  <section class="scene-frame" aria-label="현재 열차 장면">
@@ -85,6 +91,7 @@
  <h2 id="cinematic-title" class="visually-hidden">오프닝</h2>
  <video id="cinematic-video" autoplay playsinline preload="auto" tabindex="-1" disablepictureinpicture disableremoteplayback controlslist="nodownload nofullscreen noremoteplayback noplaybackrate"></video>
  <p id="cinematic-status" class="visually-hidden" role="status" aria-live="polite"></p>
+ <button type="button" id="cinematic-skip" class="cinematic-skip" hidden>건너뛰기 <span aria-hidden="true">›</span></button>
 </dialog>
 
 <dialog id="overlay" class="game-dialog" aria-labelledby="overlay-title">

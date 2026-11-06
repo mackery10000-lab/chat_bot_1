@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 100" preserveAspectRatio="none">
+  <defs>
+    <linearGradient id="wood" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#241107"/>
+      <stop offset=".3" stop-color="#5b3218"/>
+      <stop offset=".44" stop-color="#94613a"/>
+      <stop offset=".62" stop-color="#5a3016"/>
+      <stop offset="1" stop-color="#1f0e05"/>
+    </linearGradient>
+  </defs>
+  <g transform="matrix(-1 0 0 1 140 0)">
+    <path fill="url(#wood)" d="M4 50C4 36 13 27 29 27 44 27 54 37 66 41 73 43 79 44 84 44V56C79 56 73 57 66 59 54 63 44 73 29 73 13 73 4 64 4 50Z"/>
+    <path fill="url(#wood)" d="M82 40C89 37 92 22 100 12 106 8 117 6 124 6L122 16 128 26 121 37 128 50 121 63 128 74 122 84 124 94C117 94 106 92 100 88 92 78 89 63 82 60Z"/>
+    <path fill="#120803" fill-opacity=".45" d="M112 7 124 6 122 16 128 26 121 37 128 50 121 63 128 74 122 84 124 94 112 93Z"/>
+  </g>
+</svg>

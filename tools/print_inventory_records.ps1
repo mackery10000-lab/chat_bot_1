@@ -144,7 +144,7 @@ foreach($doc in $source.records) {
     $title=[string]$doc.title
     $titleSize=50.0;$titleLeading=64.0
     if($doc.id -eq 'route_report'){$title="2016년 아지산역`n폐쇄 예정 및 선로 통제 보고서";$titleSize=43;$titleLeading=54}
-    elseif($doc.id -eq 'newspaper'){$title="23시 59분 출발 열차,`n흔적도 없이 사라져";$titleSize=45;$titleLeading=56}
+    elseif($doc.id -eq 'newspaper'){$title="23시 59분 실종 열차,`n흔적도 없이 사라져";$titleSize=45;$titleLeading=56}
     elseif($doc.id -eq 'facility_manual'){$title='전자 잠금장치 오류 발생 시';$titleSize=45;$titleLeading=58}
     $y+=Write-RecordText $title 42 $y 816 $titleSize $titleLeading
     $y+=12;Write-RecordRule $y $true;$y+=24

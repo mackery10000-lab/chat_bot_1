@@ -159,7 +159,7 @@ try {
   await evaluate(`window.__qaVideoEnded=false;document.querySelector('#cinematic-video').addEventListener('ended',()=>window.__qaVideoEnded=true,{once:true})`);
   await check('local '+kind+' video decodes',`(()=>{const v=document.querySelector('#cinematic-video');return v.currentSrc.endsWith('/assets/videos/${file}')&&v.videoWidth>0&&v.videoHeight>0&&Number.isFinite(v.duration)&&v.duration>10&&!v.loop&&v.playsInline;})()`);
   await wait(`!document.querySelector('#cinematic-video').paused&&document.querySelector('#cinematic-video').currentTime>.05`,'cinematic playback starts '+kind);
-  await check(kind+' has no playback controls or visible interface',`(()=>{const d=document.querySelector('#cinematic'),v=document.querySelector('#cinematic-video');return !v.controls&&!v.hasAttribute('controls')&&v.disablePictureInPicture&&v.disableRemotePlayback&&[...d.querySelectorAll('button,input,[role="status"],.cinematic-controls')].every(el=>{const r=el.getBoundingClientRect();return r.width<=1||r.height<=1||getComputedStyle(el).visibility==='hidden';});})()`);
+  await check(kind+' has no playback controls or visible interface',`(()=>{const d=document.querySelector('#cinematic'),v=document.querySelector('#cinematic-video');return !v.controls&&!v.hasAttribute('controls')&&v.disablePictureInPicture&&v.disableRemotePlayback&&[...d.querySelectorAll('button:not(#cinematic-skip),input,[role="status"],.cinematic-controls')].every(el=>{const r=el.getBoundingClientRect();return r.width<=1||r.height<=1||getComputedStyle(el).visibility==='hidden';});})()`);
   if(await evaluate(`document.querySelector('#cinematic-video').muted`))await click('#cinematic');
   await wait(`!document.querySelector('#cinematic-video').muted`,'first gesture restores cinematic sound '+kind);
   await evaluate(`TrainAudio.setMuted(false);TrainAudio.setVolume(35)`);
@@ -187,7 +187,7 @@ try {
  const openingChecks=async()=>{
   await cinematicReady('opening','opening.mp4');
   await check('opening plays before the first game action',`fetch('/api/game').then(r=>r.json()).then(d=>d.game.revision===0&&d.game.location.id==='car_1'&&d.game.status==='playing'&&d.game.attempts===null&&!d.game.clock_running)`);
-  await check('opening exposes no skip control',`!document.querySelector('#cinematic-skip')`);
+  await check('opening offers a visible skip control',`(()=>{const r=document.querySelector('#cinematic-skip').getBoundingClientRect();return r.width>1&&r.height>1&&r.right<=innerWidth&&r.top>=0;})()`);
   await finishVideo();await wait(`!document.querySelector('#cinematic').open`);await ready();
   await check('opening completion begins in car 1 without starting the clock',`fetch('/api/game').then(r=>r.json()).then(d=>d.game.location.id==='car_1'&&d.game.status==='playing'&&d.game.attempts===null&&!d.game.clock_running&&d.game.revision===0)`);
   await navigate('/chat');await ready();
@@ -391,7 +391,7 @@ try {
   await check('minimap contains only the six connected train rooms '+width,`(()=>{const rooms=[...document.querySelectorAll('#train-map [data-location]')].map(b=>b.dataset.location);return rooms.length===6&&['car_1','car_2','car_3','car_4','crew','engine'].every(id=>rooms.includes(id));})()`);
   const ending=correct?'good':'bad';
   await cinematicReady(ending,ending+'-ending.mp4');
-  await check('ending replaces the newspaper presentation '+ending,`!document.querySelector('.ending-paper')&&!document.querySelector('#overlay').open&&!document.querySelector('#cinematic-skip')`);
+  await check('ending replaces the newspaper presentation '+ending,`!document.querySelector('.ending-paper')&&!document.querySelector('#overlay').open&&document.querySelector('#cinematic-skip').hidden`);
   await call('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
   await call('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
   await check('Escape preserves the '+ending+' ending',`document.querySelector('#cinematic').open`);

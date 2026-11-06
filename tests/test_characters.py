@@ -41,7 +41,7 @@ class CharacterDialogueTest(GameTestCase):
         self.assertIn("어디로 가는 길", self.data["reply"])
         before = self.stable_progress()
         self.t("elder", "background")
-        for text in ("부산", "2016", "23시 59분", "기억이 안"):
+        for text in ("부산", "2016", "밤 10시", "기억이 안"):
             self.assertIn(text, self.data["reply"])
         self.assertNotRegex(self.data["reply"], "버뮤다|아지산|삶과 죽음|누렇게|구멍")
         self.t("elder", "off_topic")
@@ -120,7 +120,7 @@ class CharacterDialogueTest(GameTestCase):
         self.engine()
         before = self.stable_progress()
         self.t("driver", "background")
-        self.assertIn("2016년 23시 59분", self.data["reply"])
+        self.assertIn("2016년 22시", self.data["reply"])
         self.assertIn("경로 확인", self.data["reply"])
         self.assertEqual(before, self.stable_progress())
         self.t("driver", "destination")
