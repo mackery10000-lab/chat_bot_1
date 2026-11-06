@@ -969,23 +969,24 @@ class SmokeTest(GameTestCase):
         self.assertTrue(option["id"].startswith("hint."))
         self.assertEqual(option["action"], {"type": "choose", "target": option["id"]})
         self.assertNotRegex(option["label"], r"2026|2016|아지산|누렇게|구멍")
-        self.choice()
         return option
 
-    def test_normal_choices_do_not_follow_or_advance_the_solution(self):
-        first = deepcopy(self.data["game"]["choices"])
-        for choice in first:
-            self.call(action=choice["action"])
-            self.assertFalse(self.flags().get("notice_read"))
-            if choice["id"].endswith(".window"):
-                self.assertTrue(self.data["ui"]["window_video"])
-            else:
-                self.assertTrue(self.data["ui"]["non_progress"])
-            self.assertNotIn("hint_choice", self.data["ui"])
+    def test_choices_are_offered_only_during_a_conversation(self):
+        self.assertEqual(self.data["game"]["choices"], [])
+        stale = self.client.post("/api/chat", json={
+            "request_id": "stale_ambient_choice",
+            "revision": self.data["game"]["revision"],
+            "action": {"type": "choose", "target": "car_1.seat"},
+        })
+        self.assertEqual(stale.status_code, 409)
         self.a("inspect", "notice")
-        self.assertEqual(self.data["game"]["choices"], first)
-        self.assertNotIn("notice", str(first))
-        self.assertNotIn("next_car", str(first))
+        self.assertEqual(self.data["game"]["choices"], [])
+        self.a("move", "car_2")
+        self.assertEqual(self.data["game"]["choices"], [])
+        self.a("select_npc", "explorer")
+        self.assertTrue(self.data["game"]["choices"])
+        self.a("end_talk")
+        self.assertEqual(self.data["game"]["choices"], [])
 
     def test_hint_is_required_and_exposes_one_immediate_action(self):
         rejected = self.client.post("/api/chat", json={
@@ -1030,20 +1031,15 @@ class SmokeTest(GameTestCase):
         self.assertNotIn("ticket_old", self.items())
         self.assertNotRegex(self.data["reply"], "바랜|구멍")
 
-    def test_ambient_interactions_preserve_progress(self):
+    def test_no_location_offers_choices_outside_a_conversation(self):
         state = self.service.store.get(self.client.get_cookie(web.COOKIE).value)
         for location in ("car_1", "car_2", "car_3", "car_4", "crew", "engine"):
-            sample = deepcopy(state)
-            sample.update(location=location, npc="")
-            if location == "car_1":
-                self.service.engine.inspect(sample, "window")
-            original = deepcopy(sample)
-            choices = self.service.engine.choices(sample)
-            self.assertEqual(len(choices), 2)
-            for choice in choices:
-                result = self.service.engine.choose(sample, choice["id"])
-                self.assertEqual(sample, original)
-                self.assertTrue(result["ui"].get("non_progress") or result["ui"].get("window_video"))
+            for light_on in (False, True):
+                with self.subTest(location=location, light_on=light_on):
+                    sample = deepcopy(state)
+                    sample.update(location=location, npc="")
+                    sample["flags"]["light_on"] = light_on
+                    self.assertEqual(self.service.engine.choices(sample), [])
 
     def test_suggested_questions_are_offered_once_then_end_talk(self):
         state = self.service.store.get(self.client.get_cookie(web.COOKIE).value)
@@ -1063,7 +1059,7 @@ class SmokeTest(GameTestCase):
             self.assertEqual(choices, [{"id": "end_talk", "label": "대화를 마친다.", "kind": "interaction",
                                         "action": {"type": "end_talk"}}])
             sample["npc"] = ""
-            self.assertNotEqual(engine.choices(sample)[0]["id"], "end_talk")
+            self.assertEqual(engine.choices(sample), [])
 
     def test_window_video_is_only_available_in_car_one(self):
         self.a("inspect", "window")
@@ -1164,6 +1160,77 @@ class SmokeTest(GameTestCase):
         self.assertIn("삶과 죽음의 경계", self.data["reply"])
         self.assertNotIn("아지산", self.data["reply"])
 
+    def test_proof_shows_the_driver_reply_before_the_control_puzzle(self):
+        self.engine()
+        self.a("end_talk")
+        self.assertEqual(self.data["game"]["conversation"]["npc"], "")
+        self.prove()
+        self.assertTrue(self.flags()["year_proven"])
+        self.assertNotIn("control", self.data["ui"])
+        self.assertIn("믿기 어렵", self.data["reply"])
+        self.assertEqual(self.data["game"]["history"][-1]["speaker"], "기관사")
+        self.assertEqual(self.data["game"]["conversation"]["npc"], "driver")
+        self.assertEqual(self.data["game"]["attempts"], 1)
+        self.assertEqual([c["label"] for c in self.data["game"]["choices"]],
+                         ["마지막 한 번을 직접 입력해 보겠습니다."])
+        self.pick("마지막 한 번을 직접 입력해 보겠습니다.")
+        self.assertTrue(self.data["ui"]["control"])
+        self.assertEqual(self.data["game"]["attempts"], 1)
+
+    def test_narrator_lines_in_a_scene_are_not_voiced_by_the_character(self):
+        narrated = [(npc, stage, choice["response"])
+                    for npc, stages in self.service.engine.scenario.items()
+                    for stage, node in stages.items()
+                    for choice in node.get("choices", []) if choice.get("narration")]
+        self.assertEqual(len(narrated), 4)
+        self.engine()
+        self.a("select_npc", "driver")
+        self.pick("보관함에서 자료를 살펴본다.")
+        last = self.data["game"]["history"][-1]
+        self.assertEqual(self.data["reply"], "현재 연도를 뒷받침할 자료를 직접 골라 보자.")
+        self.assertEqual(last["speaker"], "차내")
+        self.assertEqual(self.data["game"]["conversation"]["npc"], "driver")
+        self.assertTrue(self.data["ui"]["inventory"])
+
+    def test_talking_with_no_target_fits_who_is_actually_around(self):
+        state = self.service.store.get(self.client.get_cookie(web.COOKIE).value)
+        engine = self.service.engine
+        def reply(location, **flags):
+            sample = deepcopy(state)
+            sample.update(location=location, npc="")
+            sample["flags"].update(flags)
+            return engine.apply_intent(sample, intent("talk", "", "greeting"))["canonical"]
+        for location in ("car_1", "crew"):
+            with self.subTest(location=location):
+                self.assertIn("말을 걸 사람이 없다", reply(location))
+        self.assertIn("어두워", reply("car_3"))
+        self.assertNotIn("사람이 없다", reply("car_3"))
+        for location, flags in (("car_2", {}), ("car_3", {"light_on": True}), ("car_4", {}), ("engine", {})):
+            with self.subTest(location=location):
+                self.assertIn("대화할 인물을 골라", reply(location, **flags))
+
+    def test_cleaner_points_to_the_elder_until_the_ticket_is_described(self):
+        self.three()
+        self.a("select_npc", "cleaner")
+        labels = [c["label"] for c in self.data["game"]["choices"]]
+        self.assertEqual(labels, ["노인과 대화한다."])
+        self.assertNotIn("승차권", str(self.data["game"]["suggestions"]))
+        self.assertNotIn("승차권", self.data["reply"])
+        self.pick("노인과 대화한다.")
+        self.assertEqual(self.data["game"]["conversation"]["npc"], "elder")
+        # Having merely met the elder does not reveal what was lost.
+        self.pick("괜찮으세요?")
+        self.a("select_npc", "cleaner")
+        self.assertEqual([c["label"] for c in self.data["game"]["choices"]], ["노인과 대화한다."])
+        self.pick("노인과 대화한다.")
+        for label in ("뭘 찾고 계신데요?", "마지막으로 본 게 언제예요?",
+                      "그때 주변에 누가 있었나요?", "승차권은 어떻게 생겼나요?"):
+            self.pick(label)
+        self.assertTrue(self.flags()["elder_features"])
+        self.pick("청소 직원이랑 대화한다.")
+        self.assertEqual([c["label"] for c in self.data["game"]["choices"]], ["혹시 승차권을 보셨나요?"])
+        self.assertIn("승차권을 보셨나요?", self.data["game"]["suggestions"])
+
     def test_authored_attendant_and_driver_keep_puzzles_player_operated(self):
         self.four()
         self.a("select_npc", "attendant")
@@ -1256,7 +1323,7 @@ class SmokeTest(GameTestCase):
 
     def test_hint_grant_expires_after_another_interaction(self):
         option = self.hint_choice()
-        self.call(action=self.choice()["action"])
+        self.a("inspect", "window")
         rejected = self.client.post("/api/chat", json={
             "request_id": "expired_hint",
             "revision": self.data["game"]["revision"], "action": option["action"],
@@ -1408,7 +1475,10 @@ class DocumentRouteTest(GameTestCase):
     def test_doc_newspaper_is_independent_2026_evidence(self):
         self.engine()
         doc = self.service.config["items"]["newspaper"]["document"]
-        self.assertIn(["발행 연도", "2026"], doc["fields"])
+        self.assertIn(["발행 연도", "2016.11.13"], doc["fields"])
+        self.assertIn("실종됐다", doc["paragraphs"][0])
+        self.assertNotIn("출발", doc["title"])
+        self.assertNotIn("23시 59분에 출발", doc["paragraphs"][0])
         self.assertFalse(self.flags().get("current_ticket_read"))
         self.prove("newspaper")
         self.assertTrue(self.flags()["newspaper_read"])

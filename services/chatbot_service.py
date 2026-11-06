@@ -556,7 +556,7 @@ class GameEngine:
                     s, "explorer_case_known", "탐험가는 2016년 실종된 13-Fri를 조사해 왔다."
                 )
                 self.give(s, "newspaper")
-                prefix = "저는 탐험가예요. 10년 전 2016년 23시 59분에 출발하고 사라진 13-Fri를 오래 조사했는데, 2026년에 같은 열차가 다시 나타났잖아요? 순전히 궁금해서 탔어요. 자료 사진이 있는 이 신문을 가져가세요. "
+                prefix = "저는 탐험가예요. 10년 전 2016년 23시 59분에 실종된 13-Fri를 오래 조사했는데, 2026년에 같은 열차가 다시 나타났잖아요? 순전히 궁금해서 탔어요. 자료 사진이 있는 이 신문을 가져가세요. "
             else:
                 prefix = ""
             if topic in ("tools", "help"):
@@ -945,7 +945,7 @@ class GameEngine:
             )
         text = "이 물건을 현재 연도의 증거로 최종 제출합니다. 잘못된 증거이면 이번 탈출 시도는 종료됩니다."
         if item == "newspaper":
-            text += " 신문에 표시된 2026년 발행 연도를 증거로 제시합니다."
+            text += " 2016년 실종 기사와 지니고 있는 2026년 승차권을 대조해 보여줍니다."
         s["confirmation"] = {
             "kind": "evidence",
             "token": secrets.token_urlsafe(24),
@@ -1022,17 +1022,21 @@ class GameEngine:
             self.mark(
                 s,
                 "year_proven",
-                "기관사가 제출한 자료의 2026년 표기를 확인하고 현재 연도를 인정했다.",
+                "기관사가 2016년 실종 기사와 2026년 승차권을 대조하고 현재 연도를 인정했다."
+                if c["item"] == "newspaper"
+                else "기관사가 제출한 자료의 2026년 표기를 확인하고 현재 연도를 인정했다.",
             )
             evidence = c["item"]
             if evidence not in s["read"]:
                 s["read"].append(evidence)
             self.mark(s, "current_ticket_read" if evidence == "ticket_current" else "newspaper_read")
             s["proof_submitted"] = evidence
+            # The driver answers first; the control choice in his scene opens the puzzle.
+            s["npc"] = "driver"
             return self.result(
-                "기관사는 제출한 자료의 2026년 표기를 확인한다. “정말 지금이 2016년이 아니라니 믿기 어렵군요. 증거는 확인했습니다. 마지막 입력을 직접 해보십시오.”",
+                ("기관사는 2016년 실종 기사와 당신의 2026년 승차권을 대조한다." if evidence == "newspaper"
+                 else "기관사는 제출한 자료의 2026년 표기를 확인한다.") + " “정말 지금이 2016년이 아니라니 믿기 어렵군요. 증거는 확인했습니다. 마지막 입력을 직접 해보십시오.”",
                 "driver", ["driver_accept"],
-                ui={"control": True},
             )
         if c["kind"] == "control":
             if (
@@ -1222,6 +1226,9 @@ class GameEngine:
         elif npc == "cleaner":
             if f.get("ticket_recovered"):
                 return "return" if f.get("old_ticket_read") else "found"
+            # The lost ticket means nothing until the elder has described it.
+            if not f.get("elder_features"):
+                return "need_elder"
         elif npc == "attendant":
             if f.get("engine_permission"):
                 return "done"
@@ -1295,90 +1302,59 @@ class GameEngine:
         s.setdefault("scenario_steps", {})[npc] = turn["next"]
         if turn.get("response") is not None:
             result["canonical"] = turn["response"]
-            result["npc"] = npc
+            result["npc"] = "" if turn.get("narration") else npc
         result["player_line"] = turn["label"]
         result["ui"]["scripted"] = True
         return result
 
     def _interaction_options(self, s):
-        """Follow authored dialogue; use ambient interactions outside its scenes."""
+        """Follow authored dialogue, then offer ambient questions; none outside a talk."""
         if s["status"] != "playing" or s["confirmation"]:
             return []
-        loc, npc, f = s["location"], s["npc"], s["flags"]
+        npc, f = s["npc"], s["flags"]
         scripted = self._scenario_options(s)
         if scripted:
             return scripted
-        if loc == "car_3" and not f.get("light_on"):
-            rows = [
-                ("listen", "어둠 속 소리에 귀를 기울인다.", "차륜이 이음매를 지날 때마다 바닥이 낮게 떨린다. 어둠 속에서 무언가를 닦는 소리가 희미하게 이어진다."),
-                ("scent", "객차에 밴 냄새를 느껴 본다.", "짙은 커피 냄새가 차가운 공기 사이에 남아 있다. 눈이 어둠에 익어도 좌석의 윤곽은 흐릿하다."),
-            ]
-        elif npc:
-            # Ambient questions remain available after the authored conversation.
-            rows = {
-                "explorer": [
-                    ("reason", "여기에는 왜 오셨어요?", "“저는 탐험가예요. 2016년에 사라진 13-Fri를 오래 조사했죠. 2026년에 다시 나타났다니 직접 타봐야 하잖아요? 순전히 궁금해서 왔어요.”"),
-                    ("ankle", "다친 발목은 좀 괜찮으세요?", "“기관사를 만나러 가다 낡은 바닥이 무너져 다쳤어요. 아직 걷기는 힘드네요. 대신 궁금한 건 얼마든지 물어보세요. 이야기는 계속할 수 있잖아요?”"),
-                    ("strange", "이 열차에서 이상한 점을 느꼈나요?", "“철교와 터널이 나타난 장소와 시간을 수첩에 적어 비교했어요. 같은 구간이 반복되는 거라니까요. 다른 승객들에게도 알렸는데 제 말을 믿지 않더라고요.”"),
-                    ("same_train", "그때 사라진 열차라고 생각하세요?", "“출발 시각도, 열차 번호도 같잖아요. 하지만 아직 추측일 뿐이에요. 닮았다는 이유만으로 같은 열차라고 단정할 수는 없죠.”"),
-                    ("rest", "조사하는 일이 많이 힘들었겠어요.", "“오래 붙잡고 있었죠. 그래도 지금 그 열차 안에 있잖아요? 이 미스터리를 직접 살펴본다니 신나는 일인데요!” 탐험가는 환하게 웃는다."),
-                ],
-                "elder": [
-                    ("concern", "괜찮으세요? 많이 놀라셨죠?", "“아이고, 걱정해 줘서 고맙소. 갑자기 밝아져서 좀 놀랐지. 이제 괜찮네.”"),
-                    ("home", "어느 쪽에서 오셨어요?", "“아이고, 부산이 내 고향 아이가. 무슨 일로 열차를 탔는지는 영 기억이 안 나네.” 노인은 잠시 생각에 잠긴다."),
-                    ("last_seen", "마지막으로 기억나는 일이 있나요?", "“아이고, 창가에서 커피를 마시고 있었지. 그걸 쏟고 나서부터 영 정신이 없었네.”"),
-                    ("nearby", "그때 주변에 다른 사람도 있었나요?", "“아이고, 청소하는 사람이 도와줬던 것 같네. 그 뒤로는 영 기억이 흐릿하구먼.”"),
-                    ("voice", "잠시 곁에서 이야기를 듣는다.", "노인은 손을 무릎에 얹은 채 낮은 목소리로 이야기를 잇는다. 바퀴 소리 사이로 고향 억양이 묻어난다."),
-                ],
-                "cleaner": [
-                    ("work", "무슨 일을 하고 계세요?", "“아이고, 손님. 어르신이 쏟으신 커피를 닦고 있어요. 조금 걸리니 잠시만 기다려 주시겠어요? 지나가실 때 미끄러지지 않게 조심하시고요.”"),
-                    ("greet", "수고가 많으시네요.", "“말씀 감사합니다, 손님.” 청소원은 잠깐 미소 지은 뒤 다시 바닥으로 시선을 내린다."),
-                    ("left_behind", "누가 물건을 두고 가지는 않았나요?", "“찾으시는 물건이 있으세요? 비슷한 물건이 여럿이라, 어떤 모양이었는지 알아야 구별할 수 있겠어요.”"),
-                    ("busy", "많이 바쁘신가요?", "“이것만 마저 닦으면 좀 나아질 거예요.” 청소원은 객차가 흔들리는 순간 손을 멈췄다가 다시 천천히 움직인다."),
-                ],
-                "attendant": [
-                    ("danger", "왜 위험하다고 하셨나요?", "“달리는 중에는 통로가 안전하지 않습니다. 갑자기 흔들릴 수 있으니 주의해 주십시오.” 승무원의 목소리는 단호하지만, 표정에는 긴장이 남아 있다."),
-                    ("expression", "승무원의 표정을 살핀다.", "승무원은 감사의 뜻으로 고개를 숙인다. 굳어 있던 표정이 조금 누그러졌다." if f.get("door_open") else "단정한 몸짓과 굳은 표정 사이에 쉽게 드러내지 않는 긴장감이 흐른다."),
-                    ("arrival", "도착할 때가 지난 것 같지 않나요?", "“운행 시간이 길어진 것은 저도 알고 있습니다.” 승무원은 잠시 말을 멈춘다. “평소와 같다고 말씀드리기는 어렵군요.”"),
-                    ("concern", "무언가 걱정되는 일이 있으신가요?", "“문을 열어주셔서 감사합니다. 승객 여러분이 무사히 계실 수 있도록 저도 돕겠습니다.” 목소리에 안도감이 묻어난다." if f.get("door_open") else "“승객 여러분이 무사한 것이 우선입니다.” 승무원은 불안을 감추듯 옷깃을 고쳐 잡으며 짧게 답한다."),
-                ],
-                "driver": [
-                    ("stop", "열차를 멈출 수는 없나요?", "“제동과 경로 확인은 이미 시도했습니다. 한 번 지났던 구간이 다시 보입니다. 정차 요구만으로 해결되지 않습니다.”"),
-                    ("sound", "운전석의 소리에 귀를 기울인다.", "운전석 안으로 바퀴와 기계가 맞물리는 소리가 전해진다. 기관사는 짧게 숨을 고른 뒤 다시 전방을 바라본다."),
-                    ("since_departure", "출발할 때부터 이런 상태였나요?", "“처음부터 이렇게 끝없이 달릴 줄 알았다면 출발하지 않았을 겁니다.” 기관사의 손에 잠깐 힘이 들어간다."),
-                    ("greet", "기관사에게 가볍게 인사한다.", "기관사는 짧게 고개를 끄덕인다. 오래 움직이지 않은 어깨에는 힘이 들어가 있다."),
-                ],
-            }[npc]
-            # Each suggested question is offered once; choices() then offers ending the talk.
-            seen = s.get("interaction_seen", {}).get(npc, [])
-            rows = [row for row in rows if row[0] not in seen][:2]
-        else:
-            rows = {
-                "car_1": [
-                    ("window", "차창 밖을 바라본다.", "어두운 차창에 실내등과 빈 좌석이 비친다. 밤 풍경의 윤곽은 바퀴 소리와 함께 천천히 흘러간다."),
-                    ("seat", "빈 좌석에 잠시 앉는다.", "좌석에 몸을 맡기자 객차의 진동이 등을 타고 전해진다. 낡은 실내등 아래로 좌석의 그림자가 흔들린다."),
-                ],
-                "car_2": [
-                    ("lamp", "천장의 조명을 올려다본다.", "낡은 등갓 안에서 따뜻한 불빛이 흔들린다. 객차가 덜컹일 때마다 작은 금속 떨림이 들린다."),
-                    ("seat", "좌석의 등받이에 손을 얹는다.", "오래된 천의 결이 손끝에 닿는다. 등받이를 통해 열차의 작고 규칙적인 진동이 전해진다."),
-                ],
-                "car_3": [
-                    ("scent", "객차에 밴 냄새를 느껴 본다.", "객차 안에 커피 냄새가 남아 있다. 손전등의 빛이 흔들릴 때마다 좌석 사이의 그림자가 움직인다."),
-                    ("light", "좌석 사이로 드리운 그림자를 본다.", "빛이 닿은 좌석과 어두운 통로 사이에 경계가 생긴다. 열차가 흔들릴 때마다 그림자의 끝이 길어졌다 짧아진다."),
-                ],
-                "car_4": [
-                    ("quiet", "객차 안의 정적에 귀를 기울인다.", "차륜의 낮은 울림 사이로 옷자락이 스치는 소리가 들린다. 밝은 객차도 어딘가 차분히 가라앉아 있다."),
-                    ("lamp", "천장의 실내등을 올려다본다.", "등갓 주위로 따뜻한 빛이 번진다. 유리 안쪽의 작은 얼룩이 빛 속에 드러난다."),
-                ],
-                "crew": [
-                    ("room", "작은 방의 분위기를 살핀다.", "좁은 방 안에 묵은 종이와 나무의 냄새가 맴돈다. 객실에서 들리던 차륜 소리가 여기서는 조금 낮게 울린다."),
-                    ("wood", "책상 가장자리의 나뭇결을 본다.", "오랜 세월 손이 닿은 가장자리가 매끄럽게 닳아 있다. 작은 흠집들이 나뭇결을 따라 이어진다."),
-                ],
-                "engine": [
-                    ("sound", "운전석의 진동을 느껴 본다.", "객실보다 가까운 곳에서 기계의 진동이 느껴진다. 낮은 울림 사이로 금속이 맞부딪치는 소리가 섞인다."),
-                    ("pause", "잠시 숨을 고른다.", "기계 소리를 들으며 천천히 숨을 내쉰다. 따뜻한 공기와 금속 냄새가 운전석을 채우고 있다."),
-                ],
-            }.get(loc, [])
+        if not npc:
+            return []
+        # Ambient questions remain available after the authored conversation.
+        rows = {
+            "explorer": [
+                ("reason", "여기에는 왜 오셨어요?", "“저는 탐험가예요. 2016년에 사라진 13-Fri를 오래 조사했죠. 2026년에 다시 나타났다니 직접 타봐야 하잖아요? 순전히 궁금해서 왔어요.”"),
+                ("ankle", "다친 발목은 좀 괜찮으세요?", "“기관사를 만나러 가다 낡은 바닥이 무너져 다쳤어요. 아직 걷기는 힘드네요. 대신 궁금한 건 얼마든지 물어보세요. 이야기는 계속할 수 있잖아요?”"),
+                ("strange", "이 열차에서 이상한 점을 느꼈나요?", "“철교와 터널이 나타난 장소와 시간을 수첩에 적어 비교했어요. 같은 구간이 반복되는 거라니까요. 다른 승객들에게도 알렸는데 제 말을 믿지 않더라고요.”"),
+                ("same_train", "그때 사라진 열차라고 생각하세요?", "“출발 시각도, 열차 번호도 같잖아요. 하지만 아직 추측일 뿐이에요. 닮았다는 이유만으로 같은 열차라고 단정할 수는 없죠.”"),
+                ("rest", "조사하는 일이 많이 힘들었겠어요.", "“오래 붙잡고 있었죠. 그래도 지금 그 열차 안에 있잖아요? 이 미스터리를 직접 살펴본다니 신나는 일인데요!” 탐험가는 환하게 웃는다."),
+            ],
+            "elder": [
+                ("concern", "괜찮으세요? 많이 놀라셨죠?", "“아이고, 걱정해 줘서 고맙소. 갑자기 밝아져서 좀 놀랐지. 이제 괜찮네.”"),
+                ("home", "어느 쪽에서 오셨어요?", "“아이고, 부산이 내 고향 아이가. 무슨 일로 열차를 탔는지는 영 기억이 안 나네.” 노인은 잠시 생각에 잠긴다."),
+                ("last_seen", "마지막으로 기억나는 일이 있나요?", "“아이고, 창가에서 커피를 마시고 있었지. 그걸 쏟고 나서부터 영 정신이 없었네.”"),
+                ("nearby", "그때 주변에 다른 사람도 있었나요?", "“아이고, 청소하는 사람이 도와줬던 것 같네. 그 뒤로는 영 기억이 흐릿하구먼.”"),
+                ("voice", "잠시 곁에서 이야기를 듣는다.", "노인은 손을 무릎에 얹은 채 낮은 목소리로 이야기를 잇는다. 바퀴 소리 사이로 고향 억양이 묻어난다."),
+            ],
+            "cleaner": [
+                ("work", "무슨 일을 하고 계세요?", "“아이고, 손님. 어르신이 쏟으신 커피를 닦고 있어요. 조금 걸리니 잠시만 기다려 주시겠어요? 지나가실 때 미끄러지지 않게 조심하시고요.”"),
+                ("greet", "수고가 많으시네요.", "“말씀 감사합니다, 손님.” 청소원은 잠깐 미소 지은 뒤 다시 바닥으로 시선을 내린다."),
+                ("left_behind", "누가 물건을 두고 가지는 않았나요?", "“찾으시는 물건이 있으세요? 비슷한 물건이 여럿이라, 어떤 모양이었는지 알아야 구별할 수 있겠어요.”"),
+                ("busy", "많이 바쁘신가요?", "“이것만 마저 닦으면 좀 나아질 거예요.” 청소원은 객차가 흔들리는 순간 손을 멈췄다가 다시 천천히 움직인다."),
+            ],
+            "attendant": [
+                ("danger", "왜 위험하다고 하셨나요?", "“달리는 중에는 통로가 안전하지 않습니다. 갑자기 흔들릴 수 있으니 주의해 주십시오.” 승무원의 목소리는 단호하지만, 표정에는 긴장이 남아 있다."),
+                ("expression", "승무원의 표정을 살핀다.", "승무원은 감사의 뜻으로 고개를 숙인다. 굳어 있던 표정이 조금 누그러졌다." if f.get("door_open") else "단정한 몸짓과 굳은 표정 사이에 쉽게 드러내지 않는 긴장감이 흐른다."),
+                ("arrival", "도착할 때가 지난 것 같지 않나요?", "“운행 시간이 길어진 것은 저도 알고 있습니다.” 승무원은 잠시 말을 멈춘다. “평소와 같다고 말씀드리기는 어렵군요.”"),
+                ("concern", "무언가 걱정되는 일이 있으신가요?", "“문을 열어주셔서 감사합니다. 승객 여러분이 무사히 계실 수 있도록 저도 돕겠습니다.” 목소리에 안도감이 묻어난다." if f.get("door_open") else "“승객 여러분이 무사한 것이 우선입니다.” 승무원은 불안을 감추듯 옷깃을 고쳐 잡으며 짧게 답한다."),
+            ],
+            "driver": [
+                ("stop", "열차를 멈출 수는 없나요?", "“제동과 경로 확인은 이미 시도했습니다. 한 번 지났던 구간이 다시 보입니다. 정차 요구만으로 해결되지 않습니다.”"),
+                ("sound", "운전석의 소리에 귀를 기울인다.", "운전석 안으로 바퀴와 기계가 맞물리는 소리가 전해진다. 기관사는 짧게 숨을 고른 뒤 다시 전방을 바라본다."),
+                ("since_departure", "출발할 때부터 이런 상태였나요?", "“처음부터 이렇게 끝없이 달릴 줄 알았다면 출발하지 않았을 겁니다.” 기관사의 손에 잠깐 힘이 들어간다."),
+                ("greet", "기관사에게 가볍게 인사한다.", "기관사는 짧게 고개를 끄덕인다. 오래 움직이지 않은 어깨에는 힘이 들어가 있다."),
+            ],
+        }[npc]
+        # Each suggested question is offered once; choices() then offers ending the talk.
+        seen = s.get("interaction_seen", {}).get(npc, [])
+        rows = [row for row in rows if row[0] not in seen][:2]
         return [{"id": key, "label": label, "kind": "interaction", "text": text}
                 for key, label, text in rows]
 
@@ -1412,8 +1388,6 @@ class GameEngine:
         s.pop("hint_choice_id", None)
         if "scenario" in option:
             return self._choose_scenario(s, option)
-        if s["location"] == "car_1" and option["id"] == "window":
-            return self.inspect(s, "window")
         if s["npc"]:
             seen = s.setdefault("interaction_seen", {}).setdefault(s["npc"], [])
             if option["id"] not in seen:
@@ -1551,9 +1525,13 @@ class GameEngine:
                 else (i.get("recipient") or s["npc"])
             )
             if not npc:
-                return self.result(
-                    "대화할 인물을 골라 주세요. 이름을 말하거나 화면에서 선택할 수 있다."
-                )
+                if self.available_npcs(s):
+                    return self.result(
+                        "대화할 인물을 골라 주세요. 이름을 말하거나 화면에서 선택할 수 있다."
+                    )
+                if s["location"] == "car_3" and not s["flags"].get("light_on"):
+                    return self.result("너무 어두워 주변이 잘 보이지 않는다. 먼저 앞을 밝힐 방법을 찾아보자.")
+                return self.result("이곳에는 말을 걸 사람이 없다. 주변을 둘러보며 조사할 수 있는 곳을 찾아보자.")
             choice_id = i.get("dialogue_choice_id", "")
             if choice_id and kind != "describe" and npc == s["npc"]:
                 option = next((o for o in self._scenario_options(s) if o["id"] == choice_id), None)
@@ -1766,6 +1744,8 @@ class GameEngine:
         if npc == "elder":
             return ["잃어버린 승차권은 어떻게 생겼나요?", "마지막으로 표를 본 곳은 어디인가요?"] if not f.get("ticket_returned") else ["하차역 이름이 기억나세요?", "현재가 몇 년이라고 생각하세요?"]
         if npc == "cleaner":
+            if not f.get("elder_features"):
+                return ["먼저 노인과 대화해 보세요."]
             return ["승차권을 보셨나요?", "어르신께 들은 외형을 직접 설명해 보세요."]
         if npc == "attendant":
             return ["열차가 같은 곳을 반복하고 있어요.", "기관실에 가려면 어떻게 해야 하나요?"] if not f.get("mission_accepted") else ["승무원실 출입문을 확인하겠습니다.", "확인한 운행 서류를 보여드리겠습니다."]
