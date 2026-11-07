@@ -67,6 +67,8 @@
 @media(prefers-reduced-motion:reduce){.chat-page #hint-btn .ui-art,.chat-page #hint-btn:after,.chat-page .train-carriage.just-opened:after,.chat-page .train-carriage.just-opened .stop-name{animation:none}.chat-page .train-carriage.just-opened:before{animation:none;opacity:1}}
 .reduced-motion .chat-page #hint-btn .ui-art,.reduced-motion .chat-page #hint-btn:after,.reduced-motion .chat-page .train-carriage.just-opened:after,.reduced-motion .chat-page .train-carriage.just-opened .stop-name,.reduced-motion.chat-page #hint-btn .ui-art,.reduced-motion.chat-page #hint-btn:after,.reduced-motion.chat-page .train-carriage.just-opened:after,.reduced-motion.chat-page .train-carriage.just-opened .stop-name{animation:none}
 .reduced-motion .chat-page .train-carriage.just-opened:before,.reduced-motion.chat-page .train-carriage.just-opened:before{animation:none;opacity:1}
+/* The UI font ships one static weight, so bold has to come from a stroke. */
+.chat-page .map-toggle span{-webkit-text-stroke:.035em currentColor}
 .chat-page .map-toggle:after{content:'▲';font-size:.7em}
 .chat-page .map-toggle[aria-expanded=false]:after{content:'▼'}
 .chat-page .map-toggle:focus-visible{outline:2px solid #f3d196;outline-offset:-2px}
@@ -96,8 +98,8 @@
 .chat-page .linear-stop .stop-name{position:relative;display:grid;place-items:center;width:91%;min-height:clamp(16px,3.3cqw,34px);padding:2px;background:url('../images/ui/note-paper.png') center/cover no-repeat;color:#30251b;text-shadow:none;font-size:clamp(9px,1.9cqw,18px);font-weight:700;white-space:nowrap;letter-spacing:0;margin:0;filter:drop-shadow(0 2px 2px #0007)}
 .chat-page .stop-state{margin-top:1px;font-size:clamp(7px,1.25cqw,12px);color:#3e2c1c;line-height:1.2;font-weight:700;white-space:nowrap}
 .chat-page .train-carriage:disabled{opacity:1;cursor:default}
-.chat-page .train-carriage.locked .stop-name{filter:brightness(.78) saturate(.6) drop-shadow(0 2px 2px #0007)}
-.chat-page .train-carriage.locked .stop-state{color:#46382a}
+/* Unreachable rooms stay unnamed until they open; visibility keeps the map's layout still. */
+.chat-page .train-carriage.locked:not(.current) .stop-name,.chat-page .train-carriage.locked:not(.current) .stop-state{visibility:hidden}
 .chat-page .train-carriage.current{background:none;border:0;box-shadow:none;opacity:1}
 .chat-page .train-carriage.current:before{content:'';position:absolute;inset:15% 6% 24%;border:2px solid #f3c77a;border-radius:5px;box-shadow:0 0 5px #ffdf9d,inset 0 0 5px #ffdf9d,0 0 16px #eab25c;pointer-events:none}
 .chat-page .train-carriage.current .stop-name{color:#24170b;filter:brightness(1.13) drop-shadow(0 0 6px #efb95d)}
