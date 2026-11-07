@@ -381,7 +381,7 @@ function renderLinearMap(){
     const b=button('',async()=>{if(overlay.open)overlay.close();await act('move',{target:p.id});},'linear-stop train-carriage'+(p.current?' current':p.visited?' visited':'')+(!p.open?' locked':''),true);
     const label=p.name;
     const description=p.id==='crew'?'승무원실 · 4호차와 기관실 사이':p.id==='engine'?'기관실 · 승무원실을 통해 연결':p.name;
-    b.dataset.location=p.id;b.setAttribute('aria-current',p.current?'location':'false');b.setAttribute('aria-label',description+' · '+status);b.title=description+' · '+status;
+    b.dataset.location=p.id;b.setAttribute('aria-current',p.current?'location':'false');b.setAttribute('aria-label',description+' · '+status);if(p.open||p.current)b.title=description+' · '+status;
     const [left,width]=sections[p.id]||[index*100/state.map.length,100/state.map.length];
     b.style.left=left+'%';b.style.width=width+'%';
     const sparkleAt=mapSparkle?.ids.has(p.id)&&p.open&&!p.current?performance.now()-mapSparkle.start:Infinity;
