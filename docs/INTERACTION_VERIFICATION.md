@@ -1,5 +1,7 @@
 # 배경 강조와 청소원 대화 검증
 
+아래는 이전 배경의 검수 기록이다. 2026-11-08에 교체한 네 배경과 현재 좌표·대상·검수 결과는 [SCENE_INTERACTIONS.md](SCENE_INTERACTIONS.md), 정의 원본은 `config/scene_layout.json`을 참고한다.
+
 검증일: 2026-11-01, 로컬 Windows 환경.
 
 ## 청소원 대화 오류

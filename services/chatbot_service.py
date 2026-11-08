@@ -10,10 +10,16 @@ import secrets
 import sqlite3
 import time
 
-from .generator import DemoGenerator, approved_reply, grounded_features, ground_cleaner_description
+from .generator import (DemoGenerator, approved_reply, grounded_features,
+                        ground_cleaner_description, confusion_intent,
+                        ground_free_continuation, ground_scenario_choice)
 from .image_selector import DemoImageSelector
 from .retriever import DemoRetriever
 from .character_dialogue import character_mood, character_reply, courteous_reaction
+from .dialogue_policy import (
+    FREE_DIALOGUE_MODES, approve_free_reply, fallback_reply,
+    free_dialogue_context, is_setting_attack,
+)
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 LOCATIONS = {
@@ -254,9 +260,12 @@ class GameEngine:
         ]
 
     def context(self, s):
+        previous = next((h for h in reversed(s["history"])
+                         if h.get("role") == "npc" and h.get("npc") == s["npc"]), {})
         return {
             "location": LOCATIONS[s["location"]],
             "active_npc": s["npc"],
+            "last_dialogue_mode": previous.get("dialogue_mode", "scenario"),
             "dialogue_choices": [{"id": o["id"], "label": o["label"]} for o in self._scenario_options(s)],
             "visible_npcs": [
                 {"id": x, "name": self.config["npcs"][x]["name"]}
@@ -280,7 +289,6 @@ class GameEngine:
                 "lever_up": "레버 올리기",
                 "handle": "문손잡이 당기기",
                 "route_report": "책상 위 운행 서류",
-                "desk": "책상",
             },
             "pending_dialogue": s["pending_dialogue"],
             "features_in_this_description": s["features"],
@@ -488,7 +496,7 @@ class GameEngine:
                 ui={"window_video": True},
             )
         if target == "desk" and s["location"] == "crew":
-            return self.read_report(s)
+            return self.result("책상에는 펼쳐진 운행 서류가 보인다. 운행 서류를 직접 살펴보자.", ui={"non_progress": True})
         if (
             target in ("door", "cover", "handle", "lever_down")
             and s["location"] == "car_4"
@@ -667,6 +675,16 @@ class GameEngine:
             if topic == "year":
                 future = " 2026년이라니, 손님도 농담을 하시는구먼요." if "2026" in intent.get("quote", "") else ""
                 return self.result("2016년이지요." + future + " 저는 평소처럼 커피를 청소하고 있었답니다.", npc, ["cleaner_lost"])
+            if f.get("ticket_recovered"):
+                s["pending_dialogue"] = ""
+                s["pending_features"] = []
+                s["features"] = []
+                s["description_item"] = ""
+                return self.result(
+                    "분실물은 이미 찾아드렸습니다. 저는 남은 커피 자국을 정리하겠습니다. 잠시 비켜 주시겠어요?",
+                    npc,
+                    ["cleaner_lost"],
+                )
             if topic in ("greeting", "other") and intent["intent"] not in ("describe", "accept"):
                 if s["cleaner_count"] >= 3:
                     hint = " 먼저 옆의 노인과 대화해 분실물 특징을 확인해 주시겠어요?" if not f.get("elder_features") else " 분실물에 관해 필요한 것이 있으면 다시 말씀해 주세요."
@@ -745,6 +763,7 @@ class GameEngine:
                 features.difference_update(intent.get("denied_features", []))
                 s["features"] = sorted(features)
                 s["pending_dialogue"] = "describe_ticket"
+                s["pending_features"] = []
                 if features == {"faded", "hole"}:
                     self.give(s, "ticket_old")
                     self.mark(
@@ -760,25 +779,27 @@ class GameEngine:
                         ["cleaner_lost"],
                     )
                 if features == {"faded"}:
+                    already_given = "faded_paper" in s["inventory"]
+                    self.give(s, "faded_paper")
                     return self.result(
-                        "바랜 종이라면 이 휴지인가요? 더 구별할 만한 특징도 말씀해 주시겠어요?",
+                        ("아까 드린 바랜 종이 말씀이신가요?" if already_given
+                         else "바랜 종이라면 이 종이인가요? 여기 드리겠습니다.")
+                        + " 초대장처럼 보이는데, 찾으시는 승차권과는 다른 것 같네요. 더 구별할 만한 특징도 말씀해 주시겠어요?",
                         npc,
                         ["cleaner_lost"],
                     )
                 if features == {"hole"}:
+                    already_given = "punched_receipt" in s["inventory"]
+                    self.give(s, "punched_receipt")
                     return self.result(
-                        "구멍이 있는 것은 이 영수증도 있네요. 종이는 어떤 모양이었는지 더 알려주시겠어요?",
+                        ("아까 드린 구멍 난 영수증 말씀이신가요?" if already_given
+                         else "구멍이 있는 것은 이 영수증도 있네요. 여기 드리겠습니다.")
+                        + " 찾으시는 승차권과는 다른 것 같네요. 종이는 어떤 모양이었는지 더 알려주시겠어요?",
                         npc,
                         ["cleaner_lost"],
                     )
                 return self.result(
                     "말씀하신 특징만으로는 물건을 확정하기 어렵습니다. 어르신께 들은 외형을 다시 설명해 주시겠어요?",
-                    npc,
-                    ["cleaner_lost"],
-                )
-            if f.get("ticket_recovered"):
-                return self.result(
-                    "분실물은 이미 찾아드렸습니다. 저는 남은 커피 자국을 정리하겠습니다. 잠시 비켜 주시겠어요?",
                     npc,
                     ["cleaner_lost"],
                 )
@@ -1494,6 +1515,18 @@ class GameEngine:
         kind = i["intent"]
         mode = i["mode"]
         target = i["target"]
+        dialogue_mode = i.get("dialogue_mode", "scenario")
+        if dialogue_mode in FREE_DIALOGUE_MODES:
+            # 자유 대화는 talk()의 단서 공개·아이템 지급·단계 변경을 거치지 않는다.
+            npc = target if target in self.config["npcs"] else (i.get("recipient") or s["npc"])
+            available = self.available_npcs(s)
+            if not npc and len(available) == 1:
+                npc = available[0]
+            if npc not in available:
+                return self.result("지금 이곳에서 대화할 수 있는 상대를 선택해 주세요.")
+            s["npc"] = npc
+            return self.result(fallback_reply(npc, dialogue_mode), npc,
+                               ui={"free_dialogue": dialogue_mode})
         if kind == "abandon":
             quote = i.get("quote", "")
             final_clause = re.split(
@@ -1823,16 +1856,36 @@ class ChatbotService:
                 result = self.engine.apply_action(s, action)
             else:
                 context = self.engine.context(s)
-                intent = self.generator.interpret(message, context)
-                intent = ground_cleaner_description(intent, message, context)
-                if intent.get("intent") == "describe":
-                    intent = grounded_features(intent, message, context)
+                intent = (confusion_intent(message, context) if is_setting_attack(message)
+                          else self.generator.interpret(message, context))
+                intent = ground_free_continuation(intent, message, context)
+                intent = ground_scenario_choice(intent, message, context)
+                if intent.get("dialogue_mode") not in FREE_DIALOGUE_MODES:
+                    intent = ground_cleaner_description(intent, message, context)
+                    if intent.get("intent") == "describe":
+                        intent = grounded_features(intent, message, context)
                 result = self.engine.apply_intent(s, intent)
             canonical = result["canonical"]
             reply = canonical
             npc = result["npc"]
             sources = []
-            if npc and action is None and not result["ui"].get("non_progress") and not result["ui"].get("scripted"):
+            dialogue_mode = result["ui"].get("free_dialogue")
+            if npc and action is None and dialogue_mode in FREE_DIALOGUE_MODES:
+                public_context = free_dialogue_context(npc, s)
+                character = {
+                    "name": self.config["npcs"][npc]["name"], "_id": npc,
+                    "_runtime": {
+                        "canonical": canonical, "dialogue_mode": dialogue_mode,
+                        "character_context": public_context,
+                        "history": [h for h in original["history"] if h.get("npc") == npc],
+                    },
+                }
+                if dialogue_mode != "confusion":
+                    reply = self.generator.generate(message, s["username"], character, [])
+                reply = approve_free_reply(reply, npc, dialogue_mode, s)
+                canonical = reply
+                sources = ["인물 설정"] if dialogue_mode == "lore" else []
+            elif npc and action is None and not result["ui"].get("non_progress") and not result["ui"].get("scripted"):
                 flags = {k for k, v in s["flags"].items() if v}
                 knowledge = self.retriever.search(
                     message, allowed_ids=result["facts"], npc=npc, flags=flags
@@ -1882,6 +1935,7 @@ class ChatbotService:
                     "npc": npc,
                     "text": reply,
                     "record": canonical if npc and canonical != reply else "",
+                    "dialogue_mode": dialogue_mode or "scenario",
                 })
             s["history"] = s["history"][-240:]
             s["revision"] = old_revision + 1

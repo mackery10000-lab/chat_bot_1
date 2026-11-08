@@ -1,4 +1,5 @@
 ﻿# Print only the right-hand record pages. Book, item art and controls stay intact.
+param([string[]]$DocumentIds = @())
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition @'
@@ -133,7 +134,15 @@ function Write-RecordSteps($paragraphs,[double]$y,[bool]$report=$false) {
 }
 
 $manifest=[ordered]@{canvas=@(900,1120);font='Nanum Myeongjo ExtraBold';contentBottom=730;records=[ordered]@{}}
-foreach($doc in $source.records) {
+$manifestPath=Join-Path $output 'layout-manifest.json'
+if($DocumentIds.Count -and (Test-Path -LiteralPath $manifestPath)) {
+    $existing=Get-Content -LiteralPath $manifestPath -Encoding UTF8 -Raw | ConvertFrom-Json
+    foreach($entry in $existing.records.PSObject.Properties){$manifest.records[$entry.Name]=$entry.Value}
+}
+$documents=@($source.records | Where-Object { !$DocumentIds.Count -or $_.id -in $DocumentIds })
+foreach($id in $DocumentIds){if($id -notin $documents.id){throw "Unknown record document: $id"}}
+$rendered=[Collections.Generic.List[string]]::new()
+foreach($doc in $documents) {
     $filename=[IO.Path]::GetFileName($doc.artwork)
     $bitmap=[Drawing.Bitmap]::new(900,1120,[Drawing.Imaging.PixelFormat]::Format32bppArgb)
     $g=[Drawing.Graphics]::FromImage($bitmap)
@@ -183,8 +192,10 @@ foreach($doc in $source.records) {
             $size=if($doc.id -eq 'newspaper'){32}else{34}
             $leading=if($doc.id -eq 'newspaper'){42}else{45}
             $y+=Write-RecordParagraph $summary $y $size $leading
-            if($doc.id -eq 'newspaper') {
-                $y+=Write-RecordParagraph ([string]$doc.paragraphs[1]) $y $size $leading
+            if($doc.id -in @('newspaper','faded_paper','punched_receipt')) {
+                foreach($paragraph in @($doc.paragraphs | Select-Object -Skip 1)) {
+                    $y+=Write-RecordParagraph ([string]$paragraph) $y $size $leading
+                }
             }
             $y+=12
             $y+=Write-RecordFields $doc.fields $y 33 43
@@ -200,9 +211,10 @@ foreach($doc in $source.records) {
     $bitmap.Save((Join-Path $staging $filename),[Drawing.Imaging.ImageFormat]::Png)
     $bitmap.Dispose()
     $manifest.records[$filename]=@{inkBounds=$bounds;lines=@($script:drawn.ToArray());documentId=$doc.id}
+    $rendered.Add($filename)
     Write-Output "$filename : ink ends at $($bounds[3])/1120 px"
 }
-foreach($filename in $manifest.records.Keys){Copy-Item -LiteralPath (Join-Path $staging $filename) -Destination (Join-Path $output $filename)}
-$manifest | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $output 'layout-manifest.json') -Encoding UTF8
+foreach($filename in $rendered){Copy-Item -LiteralPath (Join-Path $staging $filename) -Destination (Join-Path $output $filename)}
+$manifest | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
 $fonts.Dispose();$ink.Dispose();$muted.Dispose();$rule.Dispose();$heavyRule.Dispose();$format.Dispose()
-Write-Output "Printed $($manifest.records.Count) records. Book, item and action images were not modified."
+Write-Output "Printed $($rendered.Count) records. Book, item and action images were not modified."

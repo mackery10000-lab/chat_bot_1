@@ -81,6 +81,40 @@
       "artwork": "/assets/images/inventory/records/facility-manual.png"
     },
     {
+      "eyebrow": "FOUND PAPER",
+      "title": "바랜 종이",
+      "fields": [
+        [
+          "표면 글자",
+          "Invitation"
+        ]
+      ],
+      "paragraphs": [
+        "누렇게 바랜 종이에 장식 테두리와 꽃무늬가 남아 있다. 가운데에는 ‘Invitation’이라는 글자가 보인다.",
+        "종이가 바랬다는 특징은 비슷하지만, 노인이 잃어버린 승차권은 아니다."
+      ],
+      "id": "faded_paper",
+      "kind": "faded-paper",
+      "artwork": "/assets/images/inventory/records/faded-paper.png"
+    },
+    {
+      "eyebrow": "FOUND RECEIPT",
+      "title": "구멍 난 영수증",
+      "fields": [
+        [
+          "종이 종류",
+          "영수증"
+        ]
+      ],
+      "paragraphs": [
+        "구겨진 영수증 가운데가 찢어져 구멍이 나 있다. 아래쪽 가장자리도 크게 뜯겨 있다.",
+        "구멍이 있다는 특징은 비슷하지만, 노인이 잃어버린 승차권은 아니다."
+      ],
+      "id": "punched_receipt",
+      "kind": "punched-receipt",
+      "artwork": "/assets/images/inventory/records/punched-receipt.png"
+    },
+    {
       "eyebrow": "ARCHIVED TICKET",
       "title": "오래된 승차권",
       "fields": [

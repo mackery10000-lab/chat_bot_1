@@ -253,8 +253,11 @@
 .chat-page .registered-hit{inset:0;width:100%;height:100%;padding:0;border:0;border-radius:0;outline:none;transform:none;animation:none;pointer-events:auto}
 .chat-page .registered-hit:before,.chat-page .registered-hit:after{content:none}
 .chat-page .registered-visual{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .14s}
+.chat-page .registered-character .registered-visual{opacity:1}
+.chat-page .scene-world[data-mode=exploration] .darkness{z-index:7}
 .chat-page .registered-art{position:absolute;inset:0;display:block;width:100%;height:100%;max-width:none;object-fit:fill;mask-size:100% 100%;mask-repeat:no-repeat;mask-mode:alpha;pointer-events:none;transform:none}
 .chat-page .registered-hit:is(:hover,:focus-visible,:active)~.registered-visual{opacity:1;filter:brightness(1.18) drop-shadow(0 0 4px #ffd78a99) drop-shadow(0 0 9px #dba14c66)}
+.chat-page .grounded-character .registered-hit:is(:hover,:focus-visible,:active)~.registered-visual{filter:brightness(1.08) drop-shadow(0 0 2px #e5c68b80)}
 .chat-page .registered-label{bottom:auto;max-width:min(240px,65%);white-space:normal;text-align:center}
 .chat-page .registered-hit:is(:hover,:focus-visible,:active)~.registered-label{opacity:1}
 .chat-page .registered-hit:disabled{pointer-events:none}

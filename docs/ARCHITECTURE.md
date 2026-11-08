@@ -3,10 +3,10 @@
 원래 app.py와 services·config·templates·public·data·tests를 유지한다. 별도 게임 루트나 프런트 프로젝트를 만들지 않는다. .env는 원본 바이트 그대로다.
 
 1. app.py는 기존 페이지와 JSON API, 무작위 게임 쿠키, 길이·자료형·출처·오류 응답을 담당한다.
-2. generator.py의 interpret는 실제 모델 JSON Schema로 행동·대상·부정·동일 물건·특징 근거를 해석한다. 최종 실행 절에서만 대상을 정규화하고 다른 명시적 행동을 단순 수락으로 덮어쓰지 않는다.
+2. generator.py의 interpret는 실제 모델 JSON Schema로 행동·대상·부정·동일 물건·특징 근거와 대화 종류(`scenario`, `lore`, `smalltalk`, `deflect`, `confusion`)를 해석한다. 최종 실행 절에서만 대상을 정규화하고 다른 명시적 행동을 단순 수락으로 덮어쓰지 않는다.
 3. chatbot_service.py 안의 GameEngine이 장소·소유·열람·원본 반환·대화·퍼즐·엔딩을 판정한다. 외형 사실 공개와 증언 아이템은 같은 서버 사건이다. 미언급은 이전 특징을 지우지 않는다.
 4. retriever.py는 허용 fact_id·인물·공개 조건으로 자료를 먼저 제한한다. 분실 사실과 외형 사실을 분리한다.
-5. generate는 해당 NPC의 승인된 말머리를 실제 모델로 고른다. 서버 확정 대사를 그대로 결합하며, approved_reply는 허용 조합 외의 임의 사실·문장·정답을 주 화면과 이력에 확정하지 않는다.
+5. generate는 진행 대화에서 해당 NPC의 승인된 말머리와 서버 확정 대사를 결합한다. 비진행 대화는 `data/knowledge/character_profiles.json`의 인물 프로필과 허용된 현재 맥락으로 실제 모델이 답변을 구성한다. 진행 판정과 분리된 응답 검증으로 미공개 단서·출입 허가·물품 지급·역할 변경을 차단한다. 자세한 범위는 [CHARACTER_CHAT.md](CHARACTER_CHAT.md)를 따른다.
 6. 같은 파일의 GameStore가 상태·이력·동일 요청 결과를 SQLite에 함께 커밋한다. AI 실패 시 턴을 커밋하지 않고 예약을 해제한다. 마지막 기회는 최종 확인에서만 소비한다.
 7. image_selector.py는 열차 안 6개 장소, 문 개방, 손전등 시야, 현재 NPC와 표정에 따라 배경·인물·조사점 좌표를 제공한다. 마지막 제어 장치의 정답을 확정하면 즉시 GOOD이 되며 별도 출입문/승강장 장소는 없다. 엔딩은 game.ending_video로 영상을 제공한다.
 8. 기존 chatbot.js와 style.css가 일자 미니맵, 배경 조사점, 대화 시작·종료, 집중 조사, 획득 알림, 실제 준비 시간의 장면 로딩을 구현한다.

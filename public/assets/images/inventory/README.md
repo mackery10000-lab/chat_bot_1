@@ -1,5 +1,11 @@
 # Inventory artwork
 
+Two additional user PNGs are preserved byte-for-byte: `faded-paper.png`
+(612×408, invitation paper) and `punched-receipt.png` (458×544, torn receipt).
+Both keep transparent edges and use the existing mounts, catalog and detail layout.
+Their description PNGs are printed separately in `records/` using the existing font.
+See `docs/CLEANER_ITEMS.md` for behavior and regeneration.
+
 The seven item illustrations are copied byte-for-byte from the user's
 `drive-download-20261101T100753Z-1-001.zip`:
 

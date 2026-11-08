@@ -5,7 +5,7 @@ import {fileURLToPath} from 'node:url';
 import {spawn} from 'node:child_process';
 import {createRequire} from 'node:module';
 import {createHash} from 'node:crypto';
-// Run: node tools/check_gameplay_ui.mjs [--screenshots] [--puzzles-only|--cinematics-only|--doors-only|--inventory-only]
+// Run: node tools/check_gameplay_ui.mjs [--screenshots] [--cleaner-items-only|--feedback-only|--scenes-only|--puzzles-only|--cinematics-only|--doors-only|--inventory-only]
 // Uses an isolated save and offline model. No remote AI or dependency installation.
 // GAMEPLAY_QA_GAME_ROOT selects an extracted portable game for the same checks.
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -13,6 +13,9 @@ const gameRoot = path.resolve(process.env.GAMEPLAY_QA_GAME_ROOT || root);
 const cinematicsOnly = process.argv.includes('--cinematics-only');
 const doorsOnly = process.argv.includes('--doors-only');
 const inventoryOnly = process.argv.includes('--inventory-only');
+const scenesOnly = process.argv.includes('--scenes-only');
+const feedbackOnly = process.argv.includes('--feedback-only');
+const cleanerItemsOnly = process.argv.includes('--cleaner-items-only');
 const out = path.join(root, '.local', 'gameplay-ui-qa', String(Date.now()));
 fs.mkdirSync(out, {recursive: true});
 const chromeProfile = fs.mkdtempSync(path.join(out, 'chrome-'));
@@ -37,7 +40,7 @@ async function stopChild(child) {
  if(!child||child.exitCode!==null)return;
  await new Promise(resolve=>{const timer=setTimeout(resolve,5000);child.once('exit',()=>{clearTimeout(timer);resolve();});child.kill();});
 }
-const checks=[],errors=[],networkErrors=[],inventoryMetrics=[];let server,browser,socket,captureFailure,serverLog='';
+const checks=[],errors=[],networkErrors=[],inventoryMetrics=[],actorMetrics=[];let server,browser,socket,captureFailure,serverLog='';
 try {
  server=spawn(process.env.GAMEPLAY_QA_PYTHON||process.env.DIALOGUE_QA_PYTHON||path.join(gameRoot,'runtime/python.exe'),['-B','-X','utf8',path.join(root,'tools/gameplay_ui_server.py')],{cwd:gameRoot,windowsHide:true,stdio:['ignore','pipe','pipe'],env:{...process.env,PYTHONIOENCODING:'utf-8'}});
  // Flask logs every request. Drain the pipe so long suites cannot block the
@@ -131,7 +134,7 @@ try {
    const text=manifest.records['elder-testimony-'+suffix+'.png'].lines.map(line=>line.text).join(' ').replace(/\s+/g,'');
    await check('printed testimony '+suffix+' contains only its earned clues',text.includes('누렇게')===appearance&&text.includes('커피')===appearance&&text.includes('삶과죽음')===destination&&!text.includes('아지산'));
   }
-  const baseRecords=[['ticket_current','ticket-current',0],['newspaper','newspaper',0],['flashlight','flashlight',1],['facility_manual','facility-manual',0],['ticket_old','ticket-old',1],['route_report','route-report',1],['elder_testimony','elder-testimony-10',0]];
+  const baseRecords=[['ticket_current','ticket-current',0],['newspaper','newspaper',0],['flashlight','flashlight',1],['facility_manual','facility-manual',0],['ticket_old','ticket-old',1],['route_report','route-report',1],['elder_testimony','elder-testimony-10',0],['faded_paper','faded-paper',0],['punched_receipt','punched-receipt',0]];
   for(const [width,height] of [[1440,1000],[1024,768],[390,844],[320,568]]){
    await viewport(width,height);await seed('base');await openBag();await fit('inventory overview '+width);
    await check('inventory overview preserves its original book, mounts and close control '+width,`getComputedStyle(document.querySelector('.inventory-overview')).backgroundImage.includes('book-overview.png')&&document.querySelector('.inventory-mount-art')?.getAttribute('src').endsWith('/inventory/photo-mount.png')&&!!document.querySelector('#close-overlay')`);
@@ -232,7 +235,178 @@ try {
   await click(selector);await ready();
   await check('clicking the actual door moves to '+target+' '+width,`fetch('/api/game').then(r=>r.json()).then(d=>d.game.location.id==='${target}'&&d.game.status==='playing'&&!document.querySelector('#overlay').open&&document.querySelector('#scene-image').getAttribute('src')===d.scene.background)`);
  };
+ const actorHitGeometry=async(npc,width)=>{
+  const metrics=await evaluate(`(async()=>{
+   const npc=${JSON.stringify(npc)},hit=document.querySelector('.registered-character [data-npc="'+npc+'"]'),image=hit.parentElement.querySelector('.registered-art');
+   await image.decode();
+   const canvas=document.createElement('canvas');canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;
+   const context=canvas.getContext('2d',{willReadFrequently:true});context.drawImage(image,0,0);
+   const pixels=context.getImageData(0,0,canvas.width,canvas.height).data,rect=image.getBoundingClientRect();
+   const alpha=(x,y)=>x<0||y<0||x>=canvas.width||y>=canvas.height?0:pixels[(Math.round(y)*canvas.width+Math.round(x))*4+3];
+   const ink={left:canvas.width,top:canvas.height,right:0,bottom:0};
+   for(let y=0;y<canvas.height;y++)for(let x=0;x<canvas.width;x++)if(alpha(x,y)>=220){ink.left=Math.min(ink.left,x);ink.top=Math.min(ink.top,y);ink.right=Math.max(ink.right,x);ink.bottom=Math.max(ink.bottom,y);}
+   // Sample well inside opaque or empty areas, allowing antialiasing and a
+   // three-screen-pixel contour tolerance. Clear gaps and seat occlusion must
+   // not turn the entire rectangular portrait into a clickable character.
+   const radius=Math.max(5,Math.ceil(canvas.width/rect.width*3)),stepX=Math.max(2,Math.round((ink.right-ink.left)/35)),stepY=Math.max(2,Math.round((ink.bottom-ink.top)/45));
+   const neighbors=[[0,0],[radius,0],[-radius,0],[0,radius],[0,-radius],[radius,radius],[radius,-radius],[-radius,radius],[-radius,-radius]];
+   const opaque=[],empty=[],unreachable=[],leaks=[];
+   for(let y=ink.top;y<=ink.bottom;y+=stepY)for(let x=ink.left;x<=ink.right;x+=stepX){
+    const point={x:rect.left+x/canvas.width*rect.width,y:rect.top+y/canvas.height*rect.height};
+    if(point.x<0||point.y<0||point.x>=innerWidth||point.y>=innerHeight)continue;
+    const target=document.elementFromPoint(point.x,point.y);
+    if(target?.closest('.scene-top'))continue;
+    const own=target?.closest('[data-npc]')?.dataset.npc===npc;
+    if(neighbors.every(([dx,dy])=>alpha(x+dx,y+dy)>=220)){opaque.push(point);if(!own)unreachable.push({native:[x,y],point,target:target?.className});}
+    else if(neighbors.every(([dx,dy])=>alpha(x+dx,y+dy)<=2)){empty.push(point);if(own)leaks.push({native:[x,y],point});}
+   }
+   return {npc,viewport:innerWidth,src:image.getAttribute('src'),ink,opaqueSamples:opaque.length,emptySamples:empty.length,unreachable:unreachable.slice(0,8),unreachableCount:unreachable.length,leaks:leaks.slice(0,8),leakCount:leaks.length,click:opaque.find(p=>document.elementFromPoint(p.x,p.y)?.closest('[data-npc]')?.dataset.npc===npc)};
+  })()`);
+  actorMetrics.push(metrics);
+  await check('visible actor pixels receive the matching NPC '+npc+' '+width,metrics.opaqueSamples>=10&&metrics.unreachableCount===0&&!!metrics.click);
+  await check('clear gaps and occluded seats do not capture NPC clicks '+npc+' '+width,metrics.emptySamples>=10&&metrics.leakCount===0);
+  return metrics.click;
+ };
 
+ if(cleanerItemsOnly){
+  for(const [width,height] of [[1440,1000],[390,844],[320,568]]){
+   await viewport(width,height);await seed('cleaner_items');
+   const say=async message=>{await evaluate(`document.querySelector('#user-message').value=${JSON.stringify(message)}`);await click('#send-btn');await ready();};
+   const game=()=>evaluate(`fetch('/api/game').then(r=>r.json()).then(d=>d.game)`);
+   for(const [id,message,art] of [['faded_paper','누렇게 바랜 종이입니다.','faded-paper'],['punched_receipt','구멍이 뚫린 종이입니다.','punched-receipt']]){
+    await say(message);
+    await wait(`!document.querySelector('#acquisition-notice').hidden&&document.querySelector('#acquisition-notice img')?.complete`);
+    await check('partial description displays its own acquisition picture '+id+' '+width,`document.querySelector('#acquisition-notice img').getAttribute('src').endsWith('/inventory/${art}.png')`);
+    await snapshot('cleaner-award-'+id+'-'+width);
+    let g=await game();await check('partial answer retains the lost-ticket gate '+id+' '+width,g.inventory.some(i=>i.id===id)&&!g.inventory.some(i=>i.id==='ticket_old'));
+    await click('.acquired-close');await openBag();await openItem(id);
+    const metrics=await captureInventoryRecord('cleaner-'+id+'-'+width,width<601?'mobile':'desktop',art,0,null,art);
+    await check('wrong paper description distinguishes it from the lost ticket '+id+' '+width,metrics.alt.includes('승차권은 아니다'));
+    await click('#close-overlay');
+    await say(message);
+    g=await game();await check('repeating partial answer does not duplicate the picture '+id+' '+width,g.inventory.filter(i=>i.id===id).length===1&&await evaluate(`document.querySelector('#acquisition-notice').hidden`));
+   }
+   await say('누렇게 바랜 종이에 구멍이 뚫려 있는 승차권입니다.');
+   const g=await game();await check('both features still award the real ticket and preserve the papers '+width,['ticket_old','faded_paper','punched_receipt'].every(id=>g.inventory.some(i=>i.id===id)));
+   await snapshot('cleaner-real-ticket-'+width);
+  }
+ }
+ if(feedbackOnly){
+  await call('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'no-preference'}]});
+  for(const [width,height] of [[1440,1000],[390,844],[320,568]]){
+   await viewport(width,height);await seed('feedback');
+   await evaluate(`localStorage.removeItem('train_map_closed')`);await navigate('/chat');await ready();
+   await check('map scroll and bold toggle restored '+width,`document.querySelector('#map-toggle').getAttribute('aria-expanded')==='true'&&getComputedStyle(document.querySelector('#map-toggle span')).webkitTextStrokeWidth!=='0px'&&document.querySelectorAll('.train-map-lights-off').length===5`);
+   await check('locked rooms hide names, tooltips and accessible names '+width,`[...document.querySelectorAll('.train-carriage.locked:not(.current)')].every(b=>getComputedStyle(b.querySelector('.stop-name')).visibility==='hidden'&&!b.title&&b.getAttribute('aria-label')==='아직 열리지 않은 칸')`);
+   await check('hint sparkles before it is requested '+width,`getComputedStyle(document.querySelector('#hint-btn .ui-art')).animationIterationCount==='infinite'`);
+   await snapshot('feedback-start-'+width);
+   await click('#map-toggle');await wait(`document.querySelector('#train-map-panel').getBoundingClientRect().height<1`);
+   await check('closed map is inert and shows current room '+width,`document.querySelector('#train-map-panel').inert&&document.querySelector('#map-toggle').textContent.includes('1호차')`);
+   await navigate('/chat');await ready();
+   await check('map fold preference survives reload '+width,`document.querySelector('#train-map-panel').inert&&document.querySelector('#map-toggle').getAttribute('aria-expanded')==='false'`);
+   await click('#map-toggle');await wait(`!document.querySelector('.train-map-bar').classList.contains('rolling')`);
+   await click('#hint-btn');await ready();
+   await check('hint sparkle stops while hint is open '+width,`document.querySelector('#hint-btn').getAttribute('aria-expanded')==='true'&&getComputedStyle(document.querySelector('#hint-btn .ui-art')).animationName==='none'`);
+   await click('[data-hotspot="notice"]');await ready();await wait(`document.querySelector('#overlay').open`);
+   await check('new room sparkle waits for the notice to close '+width,`!document.querySelector('[data-location="car_2"]').classList.contains('just-opened')`);
+   await click('#close-overlay');await wait(`document.querySelector('[data-location="car_2"]').classList.contains('just-opened')`);
+   await check('newly reachable room sparkles four times '+width,`getComputedStyle(document.querySelector('[data-location="car_2"]'),'::before').animationIterationCount==='4'&&getComputedStyle(document.querySelector('[data-location="car_2"] .stop-name')).visibility==='visible'`);
+   await snapshot('feedback-unlocked-'+width);
+   await click('[data-location="car_2"]');await ready();await click('[data-npc="explorer"]');await ready();
+   await wait(`document.querySelector('#train-map-panel').getBoundingClientRect().height<1`);
+   await check('conversation automatically folds the map '+width,`document.querySelector('#train-map-panel').inert&&document.querySelector('#map-toggle').textContent.includes('2호차')&&!!document.querySelector('.character-sprite')`);
+   await snapshot('feedback-conversation-'+width);
+   await click('#end-talk');await ready();await wait(`!document.querySelector('.train-map-bar').classList.contains('rolling')`);
+   await check('conversation restores the player-opened map '+width,`!document.querySelector('#train-map-panel').inert&&document.querySelector('#map-toggle').getAttribute('aria-expanded')==='true'`);
+   await click('#map-toggle');await wait(`!document.querySelector('.train-map-bar').classList.contains('rolling')`);
+   await click('[data-npc="explorer"]');await ready();await click('#end-talk');await ready();
+   await check('conversation preserves a map closed by the player '+width,`document.querySelector('#train-map-panel').inert`);
+   await seed('proof');await openBag();await openItem('newspaper');
+   await check('newspaper is the original 2016 disappearance record '+width,`document.querySelector('.inventory-record-image').alt.includes('2016.11.13')&&!document.querySelector('.inventory-record-image').alt.includes('2026')`);
+   await click('[aria-label="이 물건을 최종 증거로 제출"]');await ready();
+   await check('newspaper proof compares the owned current ticket '+width,`document.querySelector('#overlay').textContent.includes('2026년 승차권')`);
+   await click('[aria-label="최종 확정"]');await ready();
+   await check('driver replies before opening the manual control '+width,`!document.querySelector('#overlay').open&&document.querySelector('#speaker-name').textContent==='기관사'&&document.querySelector('#dialogue-text').textContent.includes('믿기 어렵')&&document.querySelector('#choice-list').textContent.includes('마지막 한 번')`);
+   await snapshot('feedback-driver-proof-'+width);
+   await click('#choice-list .choice-button');await ready();
+   await check('player choice opens restored control puzzle '+width,`document.querySelector('#overlay').open&&document.querySelector('#overlay').dataset.view==='control'`);
+  }
+  await viewport(390,844);await issueName('윤슬');await cinematicReady('opening','opening.mp4');
+  await click('#cinematic-skip');await ready();
+  await check('opening skip enters the fresh game and releases media '+390,`!document.querySelector('#cinematic').open&&!document.querySelector('#cinematic-video').hasAttribute('src')&&document.querySelector('#scene-image').naturalWidth===1403`);
+ }
+ if(scenesOnly){
+  const expected={car_1:['notice','window'],car_2:[],car_3:[],car_4:['crew_door','inspection_cover','door_handle'],crew:['report'],engine:['control','engine_lever']};
+  const npcs={car_2:['explorer'],car_3:['cleaner','elder'],car_4:['attendant'],engine:['driver']};
+  for(const [width,height] of [[1440,1000],[390,844],[320,568]]){
+   await viewport(width,height);
+   for(const location of Object.keys(expected)){
+    await seed('scene_'+location);
+    await check('native scene ratio '+location+' '+width,`(()=>{const w=document.querySelector('#scene-world').getBoundingClientRect(),i=document.querySelector('#scene-image');return Math.abs(w.width/w.height-i.naturalWidth/i.naturalHeight)<.003&&document.documentElement.scrollWidth<=innerWidth;})()`);
+    await check('all visible actor layers load '+location+' '+width,`[...document.querySelectorAll('.registered-character .registered-art')].every(i=>i.complete&&i.naturalWidth===document.querySelector('#scene-image').naturalWidth&&getComputedStyle(i.parentElement).opacity==='1')`);
+    if(location==='car_3')await check('flashlight shades actors as well as the scene '+width,`Number(getComputedStyle(document.querySelector('#darkness')).zIndex)>Number(getComputedStyle(document.querySelector('#character-layer')).zIndex)`);
+    if(location==='crew'){
+     await check('crew room has only the operating report interaction '+width,`!document.querySelector('[data-hotspot="desk"]')&&document.querySelectorAll('[data-hotspot="report"]').length===1`);
+     await evaluate(`document.querySelector('#scene-image').scrollIntoView({block:'center'})`);
+     const closedBook=await evaluate(`(()=>{const r=document.querySelector('#scene-image').getBoundingClientRect();return {x:r.left+r.width*650/2464,y:r.top+r.height*1300/1968};})()`);
+     await check('closed rear record is not an interactive target '+width,closedBook.x>0&&closedBook.x<width&&closedBook.y>0&&closedBook.y<height&&await evaluate(`!document.elementFromPoint(${closedBook.x},${closedBook.y})?.closest('[data-hotspot]')`));
+     await call('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...closedBook});
+     await call('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...closedBook});
+     await check('clicking the closed rear record keeps exploration open '+width,`!document.querySelector('#overlay').open`);
+    }
+    await snapshot('scene-'+location+'-'+width);
+    for(const id of expected[location]){
+     const selector='[data-hotspot="'+id+'"]';
+     await click(selector,true);
+     await check('exact hover silhouette '+id+' '+width,`getComputedStyle(document.querySelector(${JSON.stringify(selector)}).nextElementSibling).opacity==='1'`);
+     await evaluate(`document.querySelector(${JSON.stringify(selector)}).focus({preventScroll:true})`);
+     await check('keyboard focus '+id+' '+width,`document.activeElement===document.querySelector(${JSON.stringify(selector)})`);
+     await snapshot('target-'+id+'-'+width);
+     await click(selector);
+     await wait(`document.querySelector('#overlay').open`);
+     const view=id==='notice'?'notice':id==='window'?'window':location==='crew'?'inventory':location==='engine'?'control':'lever';
+     await check('target opens preserved interaction '+id+' '+width,`document.querySelector('#overlay').dataset.view===${JSON.stringify(view)}`);
+     await snapshot('opened-'+id+'-'+width);
+     // Use a fresh fixture: closing a report legitimately acknowledges it.
+     await seed('scene_'+location);
+    }
+    for(const npc of npcs[location]||[]){
+     const affected=['explorer','elder','cleaner','attendant','driver'].includes(npc);
+     if(affected){
+      const point=await actorHitGeometry(npc,width);
+      await call('Input.dispatchMouseEvent',{type:'mouseMoved',...point});
+      await call('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...point});
+      await call('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...point});
+     }else await click('[data-npc="'+npc+'"]');
+     await ready();
+     await check('actor starts original dialogue '+npc+' '+width,`document.querySelector('.person-hotspot.talking')?.dataset.npc===${JSON.stringify(npc)}&&document.querySelectorAll('.character-sprite').length===1&&!document.querySelector('#dialogue-box').hidden`);
+     await snapshot('actor-'+npc+'-'+width);
+     await wait(`!document.querySelector('.train-map-bar').classList.contains('rolling')`,'map settles before ending '+npc);
+     await click('#end-talk');await ready();
+     await check('dialogue returns to placed actor '+npc+' '+width,`!document.querySelector('.person-hotspot.talking')&&!!document.querySelector('.registered-character [data-npc="${npc}"]')`);
+     if(affected){
+      await call('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
+      await call('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
+      await evaluate(`document.querySelector('.registered-character [data-npc="${npc}"]').focus({preventScroll:true})`);
+      await wait(`document.querySelector('.registered-character [data-npc="${npc}"]').matches(':focus-visible')&&getComputedStyle(document.querySelector('.registered-character [data-npc="${npc}"]').parentElement.querySelector('.registered-label')).opacity==='1'`,'visible NPC keyboard focus '+npc);
+      await check('keyboard focus identifies the placed actor '+npc+' '+width,`document.activeElement.dataset.npc===${JSON.stringify(npc)}&&document.activeElement.getAttribute('aria-label').includes('말 걸기')`);
+      await call('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,text:'\r',unmodifiedText:'\r'});
+      await call('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
+      await wait(`document.querySelector('.person-hotspot.talking')?.dataset.npc===${JSON.stringify(npc)}`,'native Enter activates NPC '+npc);
+      await ready();
+      await check('keyboard activation opens the same NPC '+npc+' '+width,`document.querySelector('.person-hotspot.talking')?.dataset.npc===${JSON.stringify(npc)}`);
+      await wait(`!document.querySelector('.train-map-bar').classList.contains('rolling')`,'map settles after keyboard conversation '+npc);
+      await click('#end-talk');await ready();
+      await wait(`!document.querySelector('.person-hotspot.talking')`,'keyboard conversation ends '+npc);
+     }
+    }
+    if(location==='car_2'||location==='car_3')await walkThroughDoor(location==='car_2'?'car_3':'car_4',width);
+   }
+   await seed('dark');
+   await check('dark car hides every actor and door '+width,`document.querySelectorAll('.person-hotspot,[data-hotspot^="door_to_"]').length===0&&!document.querySelector('#darkness').hidden`);
+  }
+ }
+ if(!scenesOnly&&!feedbackOnly&&!cleanerItemsOnly){
  if(inventoryOnly)await inventoryChecks();
  if(cinematicsOnly&&!inventoryOnly){
   await viewport(390,844);await issueName('윤슬');await openingChecks();
@@ -407,6 +581,7 @@ try {
  await check('a completed new opening begins a fresh car 1 game',`fetch('/api/game').then(r=>r.json()).then(d=>d.game.location.id==='car_1'&&d.game.status==='playing'&&d.game.attempts===null&&!d.game.clock_running&&!document.querySelector('#cinematic').open)`);
  await openingRecoveryChecks();
  }
+ }
  await check('no failed game or asset responses',networkErrors.length===0);
  await check('no browser exceptions',errors.length===0);
  console.log(JSON.stringify({passed:checks.length,gameRoot,artifacts:out},null,2));
@@ -414,6 +589,7 @@ try {
 finally{
  fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({gameRoot,checks,errors,networkErrors,...(errors.length?{serverLog}: {})},null,2));
  if(inventoryMetrics.length)fs.writeFileSync(path.join(out,'inventory-metrics.json'),JSON.stringify(inventoryMetrics,null,2));
+ if(actorMetrics.length)fs.writeFileSync(path.join(out,'actor-hit-metrics.json'),JSON.stringify(actorMetrics,null,2));
  socket?.close();await stopChild(browser);await stopChild(server);
  const resolvedOut=fs.realpathSync(out),resolvedProfile=fs.realpathSync(chromeProfile);
  if(resolvedProfile.startsWith(resolvedOut+path.sep)&&path.basename(resolvedProfile).startsWith('chrome-'))fs.rmSync(resolvedProfile,{recursive:true,force:true,maxRetries:8,retryDelay:150});

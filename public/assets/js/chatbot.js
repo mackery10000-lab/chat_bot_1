@@ -66,7 +66,8 @@ function dismissAcquisition(){clearTimeout(acquisitionTimer);$('acquisition-noti
 const inventoryArtwork = {
   ticket_current:'ticket-current', newspaper:'newspaper', flashlight:'flashlight',
   facility_manual:'facility-manual', elder_testimony:'elder-testimony',
-  ticket_old:'ticket-old', route_report:'route-report'
+  ticket_old:'ticket-old', route_report:'route-report',
+  faded_paper:'faded-paper', punched_receipt:'punched-receipt'
 };
 function inventoryArt(item, cls='inventory-item-art') {
   const img=node('img',cls);
@@ -267,17 +268,24 @@ function registeredHotspot(layer,p,handler,person=false){
   // scale. The silhouette clips only the hit area; it never clips the glow.
   const art=p.registration;
   if(art.background!==scene.background)return;
-  const group=node('div','registered-hotspot');
+  const sprite=art.render_mode==='sprite';
+  const group=node('div','registered-hotspot'+(sprite?' registered-character':'')+(art.grounded?' grounded-character':''));
   const b=button('',handler,(person?'person-hotspot':'world-hotspot')+' registered-hit',true);
   b.style.clipPath='polygon('+art.polygon.map(([x,y])=>x+'% '+y+'%').join(',')+')';
+  if(person&&art.hit_path){
+    const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg'),defs=document.createElementNS(ns,'defs'),clip=document.createElementNS(ns,'clipPath'),path=document.createElementNS(ns,'path');
+    svg.setAttribute('width','0');svg.setAttribute('height','0');svg.setAttribute('aria-hidden','true');svg.style.position='absolute';
+    clip.id='actor-hit-'+p.id;clip.setAttribute('clipPathUnits','objectBoundingBox');path.setAttribute('d',art.hit_path);
+    clip.append(path);defs.append(clip);svg.append(defs);group.append(svg);b.style.clipPath='url("#'+clip.id+'")';
+  }
   const label=person?p.name+' · 대화':p.label;
   b.setAttribute('aria-label',person?p.name+'에게 말 걸기':label);
   if(person){b.dataset.npc=p.id;b.setAttribute('aria-controls','dialogue-box');b.setAttribute('aria-expanded','false');}
   else b.dataset.hotspot=p.id;
   // Mask the original texture after sampling it at the background's scale.
   // Resampling a transparent cutout directly can darken its boundary pixels.
-  const img=node('img','registered-art');img.src=art.background;img.alt='';img.draggable=false;
-  img.style.maskImage='url("'+art.image+'")';
+  const img=node('img','registered-art');img.src=sprite?art.image:art.background;img.alt='';img.draggable=false;
+  if(!sprite)img.style.maskImage='url("'+art.image+'")';
   img.setAttribute('aria-hidden','true');
   const visual=node('div','registered-visual');visual.append(img);
   const caption=node('span','hotspot-label registered-label',label);
@@ -381,7 +389,11 @@ function renderLinearMap(){
     const b=button('',async()=>{if(overlay.open)overlay.close();await act('move',{target:p.id});},'linear-stop train-carriage'+(p.current?' current':p.visited?' visited':'')+(!p.open?' locked':''),true);
     const label=p.name;
     const description=p.id==='crew'?'승무원실 · 4호차와 기관실 사이':p.id==='engine'?'기관실 · 승무원실을 통해 연결':p.name;
+
+    b.dataset.location=p.id;b.setAttribute('aria-current',p.current?'location':'false');b.setAttribute('aria-label',p.open||p.current?description+' · '+status:'아직 열리지 않은 칸');if(p.open||p.current)b.title=description+' · '+status;
+
     b.dataset.location=p.id;b.setAttribute('aria-current',p.current?'location':'false');b.setAttribute('aria-label',description+' · '+status);if(p.open||p.current)b.title=description+' · '+status;
+
     const [left,width]=sections[p.id]||[index*100/state.map.length,100/state.map.length];
     b.style.left=left+'%';b.style.width=width+'%';
     const sparkleAt=mapSparkle?.ids.has(p.id)&&p.open&&!p.current?performance.now()-mapSparkle.start:Infinity;

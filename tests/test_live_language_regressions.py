@@ -36,8 +36,10 @@ class LiveLanguageRegressionTest(GameTestCase):
                 ))
                 self.assertNotIn("ticket_old", self.items())
                 self.assertFalse(self.flags().get("ticket_recovered"))
-                self.assertIn("휴지", self.data["reply"])
-                self.assertEqual(self.data["events"], [])
+                self.assertIn("초대장", self.data["reply"])
+                self.assertIn("faded_paper", self.items())
+                self.assertNotIn("punched_receipt", self.items())
+                self.assertEqual([event["item"]["id"] for event in self.data["events"]], ["faded_paper"])
 
     def test_explicit_hole_negation_overrides_incorrect_model_positive(self):
         self.ready_for_description()
@@ -46,7 +48,9 @@ class LiveLanguageRegressionTest(GameTestCase):
             intent("describe", "cleaner", "appearance", features=["faded", "hole"]),
         )
         self.assertNotIn("ticket_old", self.items())
-        self.assertIn("휴지", self.data["reply"])
+        self.assertIn("초대장", self.data["reply"])
+        self.assertIn("faded_paper", self.items())
+        self.assertNotIn("punched_receipt", self.items())
 
     def test_emphasis_keeps_both_features_and_awards_only_once(self):
         for message in (

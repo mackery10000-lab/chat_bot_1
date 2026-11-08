@@ -16,7 +16,7 @@ python -m unittest discover tests  # all tests; no API calls or cost
 python -m unittest tests.test_smoke.<Class>.<test>   # single test
 ```
 
-- Needs `OPENAI_API_KEY` (env or `.env`; optional `OPENAI_MODEL`, default `gpt-4o-mini`). `.env` must be kept byte-for-byte as provided — never rewrite it.
+- Needs `OPENAI_API_KEY` (env or `.env`; existing `OPENAI_MODEL` takes precedence; the code fallback is `gpt-4o-mini`). Live dialogue QA on 2026-11-08 used the existing configured model `gpt-6-luna`. Keep the user's `.env` unchanged.
 - `python tools/check_live_scenario.py --smoke` — opt-in QA against the real model and real routes (costs API calls; not run by unit tests).
 - `tools/check_dialogue_ui.mjs`, `check_gameplay_ui.mjs` (with `dialogue_ui_server.py` / `gameplay_ui_server.py`) — browser UI checks.
 - `tools/build_portable.py` builds the offline Windows ZIP (bundles `runtime/` embedded Python 3.11 + `public`, `templates`, `services`, `config`, `data`); `tools/verify_portable.py` checks an extracted bundle; `tools/clean_generated.py [--apply]` removes local QA profiles under `.local/`; `tools/optimize_png.py` shrinks art.
@@ -26,7 +26,7 @@ python -m unittest tests.test_smoke.<Class>.<test>   # single test
 
 - `app.py`: Flask entry. Pages `/`, `/detail`, `/chat`; JSON API `/api/game`, `/api/game/new`, chat endpoint. Anonymous random game cookie (`train_game`), same-origin check on API POSTs, 16 KB body limit, errors as `{"error":{code,message}}` (`GameError`, `AIUnavailable` handlers). Supports Vercel (`VERCEL=1` changes static serving).
 - `services/chatbot_service.py` (~2000 lines, the core): `GameStore` persists state, history and idempotent request results to SQLite (`data/train_state.sqlite3`) in one commit; `GameEngine` adjudicates location, ownership, inspection, dialogue, puzzles, endings; `ChatbotService` is the facade used by `app.py`. If the AI fails, the turn is not committed and the reservation is released. The "last chance" is consumed only at final confirmation.
-- `services/generator.py`: all OpenAI calls. `interpret` turns the player's sentence into a structured intent via JSON Schema (action, target, negation, item identity, feature evidence); the generation step only picks an approved opening phrase for the NPC, and server-confirmed lines are concatenated verbatim — the model may not invent facts or answers.
+- `services/generator.py`: all OpenAI calls. `interpret` returns structured intent and dialogue mode via JSON Schema. Scenario responses retain approved openings and verbatim server-confirmed lines. Non-progression lore, small talk and deflection use generated NPC dialogue grounded in restricted character profiles; setting-change attempts receive in-character confusion. Free dialogue cannot award items, reveal locked clues or change progression. See `docs/CHARACTER_CHAT.md` and `data/knowledge/character_profiles.json`.
 - `services/retriever.py`: restricts knowledge to allowed `fact_id`s / characters / reveal conditions before generation (`data/knowledge/`).
 - `services/character_dialogue.py`, `services/image_selector.py`: NPC dialogue data; backgrounds, character expressions and hotspot coordinates per location/door/flashlight state.
 - `config/chatbot_config.json` (bot metadata) and `config/dialogue_scenario.json` (scenario).

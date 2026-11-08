@@ -486,6 +486,10 @@ class SmokeTest(GameTestCase):
         self.a("move", "crew")
         self.assertNotIn("아지산", json.dumps(self.data, ensure_ascii=False))
         self.a("inspect", "desk")
+        self.assertNotIn("route_report", self.items())
+        self.assertFalse(self.flags().get("report_found"))
+        self.assertNotIn("document", self.data["ui"])
+        self.a("read_report")
         self.assertIn("아지산", json.dumps(self.data, ensure_ascii=False))
         self.assertTrue(self.flags()["report_found"])
         self.assertFalse(self.flags().get("report_read"))
@@ -904,7 +908,9 @@ class SmokeTest(GameTestCase):
         scenes=[]
         for loc in ("car_1","car_2","car_3","car_4","crew","engine"):
             s["location"]=loc;scenes.append(self.service.image_selector.scene(s,self.service.config)["background"])
-        self.assertEqual(len(set(scenes)),6)
+        self.assertEqual(len(set(scenes)),4)
+        self.assertEqual(scenes[0], scenes[1])
+        self.assertEqual(scenes[1], scenes[2])
         self.three();self.assertEqual(self.data["scene"]["light_mode"],"flashlight")
         self.assertFalse(self.data["game"]["clock_running"])
 
@@ -1405,7 +1411,7 @@ class DocumentRouteTest(GameTestCase):
 
     def test_doc_report_discovery_and_read_completion_are_separate(self):
         self.four(); self.office(); self.a("move", "crew")
-        self.a("inspect", "desk")
+        self.a("read_report")
         self.assertIn("route_report", self.items())
         self.assertTrue(self.flags()["report_found"])
         self.assertFalse(self.flags().get("report_read"))
@@ -1612,7 +1618,7 @@ class RegisteredSceneTest(GameTestCase):
         state = self.service.store.get(gid)
         state["flags"].update(light_on=True, mission_accepted=True, door_open=True)
         expected = {"car_1": {"notice", "window"}, "car_4": {"crew_door", "inspection_cover", "door_handle"},
-                    "crew": {"report", "desk"}, "engine": {"control", "engine_lever"}}
+                    "crew": {"report"}, "engine": {"control", "engine_lever"}}
         for location in ("car_1", "car_2", "car_3", "car_4", "crew", "engine"):
             state["location"] = location
             scene = self.service.image_selector.scene(state, self.service.config)

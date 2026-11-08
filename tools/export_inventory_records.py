@@ -22,7 +22,10 @@ def main():
     state["flags"] = {"ticket_returned": True}
     records.append(engine.document(state, "ticket_old"))
     # Safe fallback for tools/old saved previews without an artwork field.
-    empty = dict(records[6], artwork="/assets/images/inventory/records/elder-testimony.png")
+    empty = dict(next(record for record in records
+                      if record["id"] == "elder_testimony"
+                      and record["artwork"].endswith("/elder-testimony-00.png")),
+                 artwork="/assets/images/inventory/records/elder-testimony.png")
     records.append(empty)
     actions = {
         "confirm-report": "보고서 내용 확인", "use-flashlight": "손전등 사용",

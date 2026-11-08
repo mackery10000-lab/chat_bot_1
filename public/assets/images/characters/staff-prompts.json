@@ -1,0 +1,25 @@
+{
+  "tool": "built-in image_gen",
+  "transparent_background": true,
+  "initial_generation": {
+    "prefix": "Use case: identity-preserve. Asset type: transparent in-scene NPC sprite for an existing point-and-click train mystery game. Image 1 is the exact character identity and uniform reference; image 2 is the existing environment/camera/lighting reference ONLY. ",
+    "suffix": " Output one isolated character, genuinely transparent background with clean alpha. No background, no furniture, no floor plane, no aura, no vignette, no lettering or labels. Keep the complete requested figure inside the frame with small transparent margins. Preserve the face, hair, age and uniform identity; do not create a different person.",
+    "specs": [
+      {
+        "id": "attendant",
+        "portrait": "portrait_04.png",
+        "scene": "scenes\\crew-door.png",
+        "output": "attendant-standing.png",
+        "subject": "The SAME Korean female train attendant as image 1: dark hair tucked neatly beneath her peaked railway cap, white blouse, dark fitted waistcoat with gold buttons, dark neck scarf with fine gold pattern, dark knee-length skirt, dark stockings and practical low black uniform shoes. Create a natural adult full-body standing pose, three-quarter facing slightly right toward the aisle while acknowledging the player, hands resting neatly in front of her waist, straight but relaxed posture, feet planted with believable weight and normal adult proportions. Avoid the old tilted pose and crossed ankles. This figure will stand immediately LEFT of the tall door in image 2, at the SAME depth as that door, her head about one head-height below its upper frame and her soles at the door threshold. Camera at human chest/eye height, no oversized head, no miniature person. Match the warm overhead wall-lamp light from upper left, dim amber and brown reflected light, soft shadows on lower clothes; realistic fabric and subtle painterly shading consistent with the scene and established character style. Full person including hat and both shoes, no chair, no desk or clipboard."
+      },
+      {
+        "id": "driver",
+        "portrait": "portrait_05.png",
+        "scene": "scenes\\engine.png",
+        "output": "driver-at-controls.png",
+        "subject": "The SAME Korean male train driver as image 1, recognizable dark hair and tired serious face, black railway peaked cap with gold emblem, black uniform jacket with brass buttons, epaulettes and gold cuff stripes, white shirt, dark tie and trousers. He is SEATED at the existing central driving chair in image 2, facing the front windshield and console, viewed from BEHIND in a rear three-quarter view. His shoulders and upper back face the viewer; head turns naturally about 35 degrees toward his LEFT shoulder to acknowledge the player, showing a recognizable cheek/profile rather than twisting fully backwards. Right forearm reaches gently forward toward the console control lever; left hand rests near controls. Anatomically normal adult seated body, no standing front-facing portrait. Generate the seated figure without the chair: the game will place the existing black chair backrest IN FRONT of his lower torso and legs. Include the full seated body for correct overlap, but keep the waist/hips and bent legs compact behind the existing chair. Camera is behind the driver at about seated shoulder height, matching the supplied engine-room perspective. His head should visually belong above the central chair, not float at the side of the room. Subdued warm overhead amber lamps, soft brown bounce light, dimmer lower uniform, realistic textile texture with subtle painterly contour work. No chair, no console, no new levers drawn, no furniture."
+      }
+    ]
+  },
+  "driver_refinement": "Use case: precise-object-edit / identity-preserve. Edit image 1, the transparent seated driver sprite. Image 2 is the engine-room reference, not an edit target. Keep the exact same face, cap, hair, uniform, rear three-quarter seated posture, left arm, body proportions and transparent background. CHANGE ONLY his right arm pose: raise his right gripping hand substantially, to shoulder level just below his chin / about the upper third of the whole cutout. His right elbow bends naturally and the forearm reaches forward and slightly up, so a console lever at shoulder level can fit inside the fist. Keep the right hand on the same far-right side of the silhouette, but move it vertically upward by about one head height compared with image 1. The seat and all background stay absent. The game will place his waist lower behind the existing tall chair backrest; the higher gripping hand must still touch the real control lever. No console, lever, chair, background or text drawn. Preserve clean alpha, lighting, uniform detail and original overall framing. One isolated transparent character."
+}
