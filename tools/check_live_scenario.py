@@ -160,10 +160,20 @@ class LiveScenarioRunner:
                                 key: parsed.get(key) for key in (
                                     "intent", "target", "recipient", "topic", "mode",
                                     "affirmed_features", "denied_features", "described_item",
-                                    "referent_relation", "dialogue_choice_id", "behavior")
+                                    "referent_relation", "dialogue_choice_id", "behavior", "dialogue_mode")
                             }
                     except (ValueError, TypeError):
                         record["interpretation_invalid_json"] = True
+                elif schema and "reply" in schema.get("properties", {}):
+                    # Synthetic NPC speech only; never retain prompts, keys, or
+                    # provider error text. This reveals an overzealous guard's
+                    # rejected wording during manual dialogue review.
+                    try:
+                        parsed = json.loads(value)
+                        if isinstance(parsed, dict) and isinstance(parsed.get("reply"), str):
+                            record["candidate_reply"] = parsed["reply"][:800]
+                    except (ValueError, TypeError):
+                        pass
                 return value
             except Exception:
                 record["status"] = "ai_unavailable"

@@ -66,7 +66,8 @@ function dismissAcquisition(){clearTimeout(acquisitionTimer);$('acquisition-noti
 const inventoryArtwork = {
   ticket_current:'ticket-current', newspaper:'newspaper', flashlight:'flashlight',
   facility_manual:'facility-manual', elder_testimony:'elder-testimony',
-  ticket_old:'ticket-old', route_report:'route-report'
+  ticket_old:'ticket-old', route_report:'route-report',
+  faded_paper:'faded-paper', punched_receipt:'punched-receipt'
 };
 function inventoryArt(item, cls='inventory-item-art') {
   const img=node('img',cls);
@@ -130,9 +131,10 @@ function updateDialogue(data, interaction, previous) {
   setDialogueVisible(true);
 }
 // A character line may mix narration with quoted speech: “…” is spoken, the rest is narration.
-// Lines without quotes are spoken as a whole.
+// Lines without quotes are spoken as a whole, and so are lines that only quote a word
+// mid-sentence: a particle right after the closing mark (“산”이었는데) means it is not a separate line.
 function dialogueParts(text) {
-  if(!text.includes('“'))return [node('span','dialogue-speech',text)];
+  if(!text.includes('“')||/”[가-힣]/.test(text))return [node('span','dialogue-speech',text)];
   return text.split(/(“[^”]*(?:”|$))/).filter(Boolean).map(part=>{
     if(part.startsWith('“'))return node('span','dialogue-speech',part);
     if(!part.trim())return part;
@@ -182,13 +184,20 @@ function updateLocationNotice(previous) {
     notice.hidden=true;locationNoticeTimer=null;
   },5000);
 }
+function fitDialogueFont() {
+  // Dialogue, choices and typed input share one size, scaled to the dialogue paper
+  // (the scene less its margin, up to the paper's 880px limit).
+  const paper=Math.min(document.querySelector('.scene-frame').clientWidth-20,880);
+  const size=Math.min(18,Math.max(11,6.3+paper*.0133));
+  shell.style.setProperty('--dialogue-font',size.toFixed(2)+'px');
+}
 function fitConversation() {
   if(conversationLayoutFrame!==null)return;
   conversationLayoutFrame=requestAnimationFrame(()=>{
     conversationLayoutFrame=null;
     const frame=document.querySelector('.scene-frame');
     if(!shell.classList.contains('conversation-active')){
-      frame.style.removeProperty('--conversation-scene-width');return;
+      shell.style.removeProperty('--conversation-scene-width');return;
     }
     // Fit the complete native canvas above the controls. Constraining only its
     // height would stretch the background and misalign registered hotspots.
@@ -204,7 +213,8 @@ function fitConversation() {
     const available=Math.max(160,viewportHeight-document.querySelector('.game-header').offsetHeight-padding-map.offsetHeight-console.offsetHeight-margins-borderHeight-2);
     const ratio=String(scene?.aspect_ratio||'3 / 2').split('/').map(Number);
     const aspect=ratio.length===2&&ratio.every(n=>Number.isFinite(n)&&n>0)?ratio[0]/ratio[1]:1.5;
-    frame.style.setProperty('--conversation-scene-width',(available*aspect+borderWidth)+'px');
+    // Set on the shell: the controls below share the scene's width during a conversation.
+    shell.style.setProperty('--conversation-scene-width',(available*aspect+borderWidth)+'px');
   });
 }
 function apply(data, force = false, interaction = null) {
@@ -213,6 +223,8 @@ function apply(data, force = false, interaction = null) {
   const previous=state;
   state=data.game; scene=data.scene;
   shell.classList.toggle('conversation-active',!!state.npc&&state.status==='playing');
+  syncMapWithConversation(previous);
+  noteOpenedLocations(previous);
   updateLocationNotice(previous);
   $('scene-world').style.aspectRatio=scene.aspect_ratio||'3 / 2';
   const bg=$('scene-image');if(bg.getAttribute('src')!==scene.background)bg.src=scene.background;
@@ -246,6 +258,7 @@ function apply(data, force = false, interaction = null) {
   else if(data.ui?.control) openControl();
   else if(data.ui?.lever) openLever();
   else if(overlay.open && overlay.dataset.view==='lever') openLever();
+  revealOpenedLocations();
   setBusy(busy);
   fitConversation();
 }
@@ -255,17 +268,24 @@ function registeredHotspot(layer,p,handler,person=false){
   // scale. The silhouette clips only the hit area; it never clips the glow.
   const art=p.registration;
   if(art.background!==scene.background)return;
-  const group=node('div','registered-hotspot');
+  const sprite=art.render_mode==='sprite';
+  const group=node('div','registered-hotspot'+(sprite?' registered-character':'')+(art.grounded?' grounded-character':''));
   const b=button('',handler,(person?'person-hotspot':'world-hotspot')+' registered-hit',true);
   b.style.clipPath='polygon('+art.polygon.map(([x,y])=>x+'% '+y+'%').join(',')+')';
+  if(person&&art.hit_path){
+    const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg'),defs=document.createElementNS(ns,'defs'),clip=document.createElementNS(ns,'clipPath'),path=document.createElementNS(ns,'path');
+    svg.setAttribute('width','0');svg.setAttribute('height','0');svg.setAttribute('aria-hidden','true');svg.style.position='absolute';
+    clip.id='actor-hit-'+p.id;clip.setAttribute('clipPathUnits','objectBoundingBox');path.setAttribute('d',art.hit_path);
+    clip.append(path);defs.append(clip);svg.append(defs);group.append(svg);b.style.clipPath='url("#'+clip.id+'")';
+  }
   const label=person?p.name+' · 대화':p.label;
   b.setAttribute('aria-label',person?p.name+'에게 말 걸기':label);
   if(person){b.dataset.npc=p.id;b.setAttribute('aria-controls','dialogue-box');b.setAttribute('aria-expanded','false');}
   else b.dataset.hotspot=p.id;
   // Mask the original texture after sampling it at the background's scale.
   // Resampling a transparent cutout directly can darken its boundary pixels.
-  const img=node('img','registered-art');img.src=art.background;img.alt='';img.draggable=false;
-  img.style.maskImage='url("'+art.image+'")';
+  const img=node('img','registered-art');img.src=sprite?art.image:art.background;img.alt='';img.draggable=false;
+  if(!sprite)img.style.maskImage='url("'+art.image+'")';
   img.setAttribute('aria-hidden','true');
   const visual=node('div','registered-visual');visual.append(img);
   const caption=node('span','hotspot-label registered-label',label);
@@ -296,7 +316,68 @@ function navigationHotspot(layer,p,handler) {
   caption.style.left=Math.max(12,Math.min(88,x+w/2))+'%';caption.style.top=Math.max(11,y-4)+'%';
   group.append(hit,visual,caption);layer.append(group);
 }
+function mapClosed(){return $('train-map-panel').classList.contains('is-closed');}
+function updateMapToggle(){
+  const closed=mapClosed(),here=state?.map?.find(p=>p.current)?.name,toggle=$('map-toggle');
+  toggle.setAttribute('aria-expanded',String(!closed));
+  toggle.replaceChildren(node('span','',closed?'열차 안내도 펼치기':'열차 안내도 접기'));
+  if(closed&&here)toggle.append(node('span','map-toggle-place','· '+here));
+}
+function applyMapClosed(closed){
+  const panel=$('train-map-panel');
+  panel.classList.toggle('is-closed',closed);panel.inert=closed;updateMapToggle();
+}
+let mapRollTimer=null;
+function rollMap(closed){
+  // Animate measured pixels: the sheet must stay attached to the bottom roller.
+  // Only a click rolls the map, so restoring a saved state never animates.
+  const bar=document.querySelector('.train-map-bar'),panel=$('train-map-panel');
+  const from=panel.getBoundingClientRect().height;
+  panel.getAnimations().forEach(animation=>animation.cancel());
+  bar.classList.add('rolling');clearTimeout(mapRollTimer);
+  mapRollTimer=setTimeout(()=>bar.classList.remove('rolling'),650);
+  applyMapClosed(closed);
+  const to=panel.getBoundingClientRect().height;
+  const still=document.documentElement.classList.contains('reduced-motion')||matchMedia('(prefers-reduced-motion:reduce)').matches;
+  if(!still)panel.animate({height:[from+'px',to+'px']},{duration:600,easing:'cubic-bezier(.45,.05,.3,1)'});
+}
+// True only while a conversation holds the map shut that the player had left open.
+let mapAutoClosed=false;
+function toggleMapByPlayer(){
+  const closed=!mapClosed();
+  mapAutoClosed=false;rollMap(closed);
+  try{localStorage.setItem('train_map_closed',String(closed));}catch{}
+}
+// Carriages that became reachable wait here until the player can actually see the map.
+const pendingOpened=new Set();
+const MAP_SPARKLE_MS=4000;
+let mapSparkle=null;
+function noteOpenedLocations(previous){
+  if(!previous?.map)return;
+  const wasOpen=new Set(previous.map.filter(p=>p.open).map(p=>p.id));
+  state.map.filter(p=>p.open&&!wasOpen.has(p.id)).forEach(p=>pendingOpened.add(p.id));
+}
+function revealOpenedLocations(){
+  if(!pendingOpened.size||state?.status!=='playing'||state.npc||overlay.open||cinematic.open)return;
+  // Wait for the sheet to come off the roller so the sparkle is not hidden behind it.
+  let delay=document.querySelector('.train-map-bar').classList.contains('rolling')?450:0;
+  if(mapClosed()){rollMap(false);delay=450;}
+  mapSparkle={ids:new Set(pendingOpened),start:performance.now()+delay};
+  pendingOpened.clear();
+  renderLinearMap();
+}
+function syncMapWithConversation(previous){
+  const talking=!!state.npc&&state.status==='playing';
+  const wasTalking=!!previous?.npc&&previous.status==='playing';
+  if(talking&&!wasTalking&&!mapClosed()){
+    mapAutoClosed=true;
+    if(previous)rollMap(true);else applyMapClosed(true); // Reloaded mid-conversation.
+  }else if(!talking&&wasTalking&&mapAutoClosed){
+    mapAutoClosed=false;rollMap(false);
+  }
+}
 function renderLinearMap(){
+  updateMapToggle();
   const box=$('train-map');box.replaceChildren();
   const canvas=node('div','train-map-canvas'),art=node('img','train-map-art');
   art.src='/assets/images/ui/train-route-six-cars.png';art.alt='';art.draggable=false;art.setAttribute('aria-hidden','true');canvas.append(art);
@@ -308,9 +389,21 @@ function renderLinearMap(){
     const b=button('',async()=>{if(overlay.open)overlay.close();await act('move',{target:p.id});},'linear-stop train-carriage'+(p.current?' current':p.visited?' visited':'')+(!p.open?' locked':''),true);
     const label=p.name;
     const description=p.id==='crew'?'승무원실 · 4호차와 기관실 사이':p.id==='engine'?'기관실 · 승무원실을 통해 연결':p.name;
-    b.dataset.location=p.id;b.setAttribute('aria-current',p.current?'location':'false');b.setAttribute('aria-label',description+' · '+status);b.title=description+' · '+status;
+    b.dataset.location=p.id;b.setAttribute('aria-current',p.current?'location':'false');b.setAttribute('aria-label',p.open||p.current?description+' · '+status:'아직 열리지 않은 칸');if(p.open||p.current)b.title=description+' · '+status;
     const [left,width]=sections[p.id]||[index*100/state.map.length,100/state.map.length];
     b.style.left=left+'%';b.style.width=width+'%';
+    const sparkleAt=mapSparkle?.ids.has(p.id)&&p.open&&!p.current?performance.now()-mapSparkle.start:Infinity;
+    if(sparkleAt<MAP_SPARKLE_MS){
+      // A negative delay keeps the sparkle in step when the map is redrawn mid-way.
+      b.classList.add('just-opened');b.style.setProperty('--sparkle-delay',-sparkleAt+'ms');
+    }
+    if(!p.open&&!p.current){
+      // Lay this carriage's unlit interior over the lit route art.
+      const dark=node('img','train-map-lights-off');
+      dark.src='/assets/images/ui/train-route-lights-off.webp';dark.alt='';dark.draggable=false;dark.setAttribute('aria-hidden','true');
+      dark.style.clipPath='inset(0 '+(100-left-width)+'% 0 '+left+'%)';
+      canvas.append(dark);
+    }
     b.append(node('span','stop-name',label),node('span','stop-state',status));
     if(!p.open||p.current||state.status!=='playing'){b.disabled=true;b.dataset.locked='1';}canvas.append(b);
   });
@@ -346,12 +439,16 @@ function openWindowVideo(){
   if(state?.location.id!=='car_1')return;
   const body=openOverlay('차창 밖','window','13-Fri · NIGHT VIEW');
   const frame=node('div','window-video-view'),video=node('video'),status=node('p','window-video-status');
-  video.controls=true;video.loop=true;video.autoplay=true;video.muted=true;video.playsInline=true;video.preload='auto';
+  video.controls=false;video.disablePictureInPicture=true;video.disableRemotePlayback=true;video.loop=true;video.autoplay=true;video.muted=true;video.playsInline=true;video.preload='auto';
   video.setAttribute('aria-label','반복되는 열차 밖의 밤 풍경');video.setAttribute('playsinline','');
   for(const [ext,type] of [['webm','video/webm'],['mp4','video/mp4']]){const source=node('source');source.src='/assets/videos/car1-window-loop.'+ext;source.type=type;video.append(source);}
   video.addEventListener('error',()=>{status.textContent='영상을 재생하지 못했습니다. 창을 닫고 다시 열어 주세요.';});
   frame.append(video,status);body.append(frame);
-  video.play().catch(()=>{if(video.isConnected)status.textContent='재생 버튼을 눌러 창밖을 살펴보세요.';});
+  video.play().catch(()=>{
+    if(!video.isConnected)return;
+    status.textContent='영상을 눌러 창밖을 살펴보세요.';
+    video.addEventListener('click',()=>video.play().then(()=>{status.textContent='';}).catch(()=>{}));
+  });
 }
 function openOverlay(title, view, eyebrow='13-Fri · INVESTIGATION') { stopOverlayMedia();overlay.dataset.view=view; $('overlay-title').textContent=title; $('overlay-eyebrow').textContent=eyebrow; $('overlay-body').replaceChildren(); if(!overlay.open) overlay.showModal();placeAcquisition(); return $('overlay-body'); }
 function pendingReport(){return overlay.open&&overlay.dataset.view==='inventory'&&selectedDocument?.id==='route_report'&&state?.inventory.some(item=>item.id==='route_report'&&!item.read);}
@@ -547,7 +644,7 @@ function openCinematic(kind,src) {
   cinematicVideo.onplaying=()=>{$('cinematic-status').textContent='';watchProgress();};
   cinematicVideo.onwaiting=()=>{$('cinematic-status').textContent='영상을 불러오는 중…';};
   cinematicVideo.ontimeupdate=()=>{if(current()&&!cinematicVideo.seeking&&cinematicVideo.currentTime>lastProgress){lastProgress=cinematicVideo.currentTime;watchProgress();}};
-  cinematicVideo.onended=()=>{
+  const finish=()=>{
     if(!current())return;
     if(opening){
       try{sessionStorage.setItem(openingSeenKey,'1');}catch{}
@@ -555,7 +652,11 @@ function openCinematic(kind,src) {
     }else{releaseCinematic(false);showEndingComplete(kind);}
     resolveCompleted();
   };
+  cinematicVideo.onended=finish;
   cinematicVideo.onerror=fail;
+  // Only the opening can be skipped; endings always play through.
+  $('cinematic-skip').hidden=!opening;
+  $('cinematic-skip').onclick=opening?finish:null;
   cinematicVideo.src=src;cinematicVideo.setAttribute('aria-label',$('cinematic-title').textContent+' 영상');
   if(!cinematic.open)cinematic.showModal();
   showSceneLoading(false);watchProgress();play();
@@ -569,6 +670,9 @@ document.addEventListener('pointerdown',restoreCinematicSound,{capture:true,pass
 document.addEventListener('keydown',event=>{
   if(!cinematicActive)return;
   restoreCinematicSound(event);
+  // Keyboard players reach the skip button with Tab; endings have no button to reach.
+  if(event.key==='Tab'&&!$('cinematic-skip').hidden)return;
+  if(event.target?.id==='cinematic-skip'&&(event.key==='Enter'||event.key===' '))return;
   if(!event.ctrlKey&&!event.metaKey&&!event.altKey){event.preventDefault();event.stopImmediatePropagation();}
 },true);
 for(const name of ['pointerdown','click','dblclick','contextmenu','wheel','touchmove']){
@@ -629,6 +733,9 @@ $('user-message').addEventListener('input',e=>{e.target.style.height='auto';e.ta
 $('close-dialogue').addEventListener('click',()=>{setDialogueVisible(false);(document.querySelector('.person-hotspot.talking')||$('hint-btn')).focus({preventScroll:true});});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!e.isComposing&&!overlay.open&&!$('dialogue-box').hidden){e.preventDefault();setDialogueVisible(false);}});
 $('menu-btn').addEventListener('click',openSettings);
+$('map-toggle').addEventListener('click',toggleMapByPlayer);
+overlay.addEventListener('close',revealOpenedLocations);
+try{if(localStorage.getItem('train_map_closed')==='true')applyMapClosed(true);}catch{}
 $('hint-choice').addEventListener('click',()=>{if(activeHintChoice)perform({action:{...activeHintChoice.action}});});
 $('bag-btn').addEventListener('click',()=>openInventory());$('end-talk').addEventListener('click',()=>act('end_talk'));$('history-btn').addEventListener('click',openHistory);$('hint-btn').addEventListener('click',()=>act('hint'));$('settings-btn').addEventListener('click',openSettings);$('close-overlay').addEventListener('click',closeOverlay);overlay.addEventListener('close',stopOverlayMedia);overlay.addEventListener('cancel',e=>{e.preventDefault();closeOverlay();});
 $('retry-btn').addEventListener('click',()=>{if(lastRequest)perform(lastRequest,true);});$('reload-btn').addEventListener('click',async()=>{if(busy)return;setBusy(true);try{const data=await request('/api/game');if(state){await prepareScene(data);apply(data);}else await beginGame(data);clearError();toast('진행 기록을 불러왔습니다.');}catch(e){document.body.classList.remove('game-booting');setError(e.message,false);}finally{showSceneLoading(false);setBusy(false);}});
@@ -636,7 +743,10 @@ $('scene-world').addEventListener('pointermove',e=>{if(scene?.light_mode!=='flas
 try{if(localStorage.getItem('train_reduced_motion')==='true')document.documentElement.classList.add('reduced-motion');}catch{}
 window.addEventListener('resize',fitConversation);
 window.visualViewport?.addEventListener('resize',fitConversation);
+fitDialogueFont();
+window.addEventListener('resize',fitDialogueFont);
 if(window.ResizeObserver){
+  new ResizeObserver(fitDialogueFont).observe(document.querySelector('.scene-frame'));
   const conversationObserver=new ResizeObserver(fitConversation);
   conversationObserver.observe(document.querySelector('.conversation-console'));
   conversationObserver.observe(document.querySelector('.train-map-bar'));

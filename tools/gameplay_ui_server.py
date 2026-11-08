@@ -14,6 +14,16 @@ from services.chatbot_service import ChatbotService
 
 class LocalModel:
     def interpret(self,message,context):
+        descriptions={
+            '누렇게 바랜 종이입니다.':['faded'],
+            '구멍이 뚫린 종이입니다.':['hole'],
+            '누렇게 바랜 종이에 구멍이 뚫려 있는 승차권입니다.':['faded','hole'],
+        }
+        if message in descriptions:
+            return dict(intent='describe',target='cleaner',recipient='cleaner',topic='appearance',
+                        mode='act',quote=message,dialogue_mode='scenario',
+                        affirmed_features=descriptions[message],denied_features=[],
+                        described_item='ticket_old',referent_relation='same',dialogue_choice_id='')
         if message=='입력창 확인':
             return dict(intent='talk',target=context['active_npc'],topic='off_topic',mode='act',quote=message)
         raise AssertionError('UI checks must not call a live model')
@@ -56,6 +66,17 @@ def seed():
         state.update(location='car_2',npc='explorer',scenario_steps={'explorer':'answer'})
         state['inventory']=['ticket_current']
         state['flags']={'notice_read':True,'explorer_met':True}
+    elif phase=='feedback':
+        state.update(location='car_1',npc='',inventory=['ticket_current'],read=[],flags={},visited=['car_1'])
+    elif phase=='cleaner_items':
+        state.update(npc='cleaner',pending_dialogue='describe_ticket',
+                     inventory=['ticket_current','newspaper','flashlight','facility_manual','elder_testimony'])
+    elif phase.startswith('scene_') and phase[6:] in ('car_1','car_2','car_3','car_4','crew','engine'):
+        state['location']=phase[6:]
+        state['flags'].update(notice_read=True, report_found=True, report_read=True,
+                              ticket_recovered=True, ticket_returned=True, destination_hint=True,
+                              engine_permission=True, driver_explained=True, year_proven=True)
+        if state['location']=='car_4':state['flags']['door_open']=False
     elif phase.startswith('nav_'):
         state['location']='car_1'
         state['flags'].update(notice_read=True,ticket_recovered=True,

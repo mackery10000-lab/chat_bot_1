@@ -6,7 +6,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 public static class PixelRegistration {
-    public static long Check(string scene, string mask) {
+    public static long Check(string scene, string mask, bool sourcePixels) {
         using (var a=new Bitmap(scene)) using (var b=new Bitmap(mask)) {
             if(a.Size!=b.Size) throw new Exception("Canvas mismatch: "+mask);
             var rect=new Rectangle(0,0,a.Width,a.Height);
@@ -20,7 +20,7 @@ public static class PixelRegistration {
                     int ia=y*da.Stride+x*4,ib=y*db.Stride+x*4;
                     if(bb[ib+3]==0) continue;
                     visible++;
-                    if(bb[ib]!=aa[ia] || bb[ib+1]!=aa[ia+1] || bb[ib+2]!=aa[ia+2])
+                    if(sourcePixels && (bb[ib]!=aa[ia] || bb[ib+1]!=aa[ia+1] || bb[ib+2]!=aa[ia+2]))
                         throw new Exception("Changed source pixel at "+x+","+y+": "+mask);
                 }
                 if(visible==0) throw new Exception("Empty mask: "+mask);
@@ -36,8 +36,10 @@ $total=0
 foreach ($entry in $manifest.PSObject.Properties) {
     $a=Join-Path $root ('public'+$entry.Value.background)
     $b=Join-Path $root ('public'+$entry.Value.image)
-    $count=[PixelRegistration]::Check($a,$b)
+    $sourcePixels=$entry.Value.render_mode -ne 'sprite'
+    $count=[PixelRegistration]::Check($a,$b,$sourcePixels)
     $total+=$count
-    Write-Output "$($entry.Name): $count source pixels match exactly"
+    $mode=if($sourcePixels){'source pixels match exactly'}else{'sprite pixels on the registered canvas'}
+    Write-Output "$($entry.Name): $count $mode"
 }
-Write-Output "Verified $total opaque pixels across $(@($manifest.PSObject.Properties).Count) registered layers."
+Write-Output "Verified $total visible pixels across $(@($manifest.PSObject.Properties).Count) registered layers."

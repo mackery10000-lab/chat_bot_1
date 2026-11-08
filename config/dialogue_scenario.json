@@ -23,7 +23,7 @@
           "id": "stranded",
           "label": "열차에 탔는데 내리지를 못했어요.",
           "next": "newspaper",
-          "response": "이 미스터리 한가운데서 만나다니, 흥미롭잖아요?\n저는 탐험가예요. 2016년 23시 59분에 출발한 13-Fri가 사라진 사건을 오래 조사했어요. 그런데 2026년에 같은 시각에 떠나는 열차가 다시 나타났다지 뭐예요. 순전히 궁금해서 타봤어요.\n이 신문을 보시겠어요?",
+          "response": "이 미스터리 한가운데서 만나다니, 흥미롭잖아요?\n저는 탐험가예요. 2016년 23시 59분에 13-Fri가 실종된 사건을 오래 조사했어요. 그런데 2026년에 같은 번호의 열차가 다시 나타났다지 뭐예요. 순전히 궁금해서 타봤어요.\n이 신문을 보시겠어요?",
           "effect": {
             "type": "introduce"
           }
@@ -208,6 +208,7 @@
           "label": "찾은 승차권을 확인한다.",
           "next": "return_ticket",
           "response": "돌려드리기 전에 승차권에 적힌 내용을 확인한다.",
+          "narration": true,
           "effect": {
             "type": "read_item",
             "target": "ticket_old"
@@ -232,6 +233,21 @@
     }
   },
   "cleaner": {
+    "need_elder": {
+      "speech": "아이고, 손님. 무슨 일이세요? 어르신이 쏟으신 커피를 닦고 있답니다. 바닥이 젖었으니 조금만 조심해 주시겠어요?",
+      "choices": [
+        {
+          "id": "elder_first",
+          "label": "노인과 대화한다.",
+          "next": "entry",
+          "response": null,
+          "effect": {
+            "type": "select_npc",
+            "target": "elder"
+          }
+        }
+      ]
+    },
     "entry": {
       "speech": "아이고, 손님. 무슨 일이세요? 어르신이 쏟으신 커피를 닦고 있답니다. 바닥이 젖었으니 조금만 조심해 주시겠어요?",
       "choices": [
@@ -254,6 +270,7 @@
           "label": "분실물의 모양을 직접 설명한다.",
           "next": "describe",
           "response": "청소원이 당신의 설명을 기다린다.",
+          "narration": true,
           "effect": {
             "type": "compose"
           }
@@ -277,6 +294,7 @@
           "label": "승차권을 본다.",
           "next": "return",
           "response": "하차역의 글자는 알아볼 수 없을 정도로 훼손되어 있다.",
+          "narration": true,
           "effect": {
             "type": "read_item",
             "target": "ticket_old"
@@ -455,6 +473,7 @@
           "label": "보관함에서 자료를 살펴본다.",
           "next": "proof",
           "response": "현재 연도를 뒷받침할 자료를 직접 골라 보자.",
+          "narration": true,
           "effect": {
             "type": "inventory"
           }

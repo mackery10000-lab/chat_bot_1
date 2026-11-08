@@ -1,0 +1,42 @@
+{
+  "version": 3,
+  "coordinate_system": "native image pixels; build_scene_assets.ps1 exports full-canvas percentage registrations",
+  "scenes": {
+    "car_1": {
+      "background": "/assets/images/car1/background.png", "size": [1403,1121],
+      "door": {"target":"car_2","polygon":[[632,453],[731,453],[735,739],[633,739]]}
+    },
+    "car_2": {
+      "background": "/assets/images/car1/background.png", "size": [1403,1121],
+      "door": {"target":"car_3","polygon":[[632,453],[731,453],[735,739],[633,739]]}
+    },
+    "car_3": {
+      "background": "/assets/images/car1/background.png", "size": [1403,1121],
+      "door": {"target":"car_4","polygon":[[632,453],[731,453],[735,739],[633,739]]}
+    },
+    "car_4": {
+      "background": "/assets/images/scenes/crew-door.png", "size": [1344,896],
+      "door": {"target":"crew","polygon":[[474,60],[879,60],[885,871],[474,871]]}
+    },
+    "crew": {
+      "background": "/assets/images/scenes/crew.png", "size": [2464,1968],
+      "door": {"target":"engine","polygon":[[1069,681],[1346,683],[1355,1356],[1053,1356]]}
+    },
+    "engine": {"background":"/assets/images/scenes/engine.png","size":[1451,1084]}
+  },
+  "objects": [
+    {"key":"car1.notice","scene":"car_1","id":"notice","label":"기관실 정차 안내문","kind":"inspect","target":"notice","polygon":[[508,521],[618,519],[622,525],[622,566],[617,571],[510,569],[506,563],[507,527]]},
+    {"key":"car1.window","scene":"car_1","id":"window","label":"차창 밖 반복 풍경","kind":"inspect","target":"window","polygon":[[270,532],[316,527],[321,640],[268,647]]},
+    {"key":"car2.explorer","scene":"car_2","id":"explorer","label":"탐험가","kind":"person","sprite":{"source":"/assets/images/characters/explorer-seated.png","rect":[160,485,420,630],"grounded":true,"tone":[0.86,0.84,0.79],"shadows":[[320,837,200,38,82],[432,1090,93,21,72]],"occlusion":[[[0,854],[271,857],[317,867],[337,880],[344,1121],[0,1121]]]}},
+    {"key":"car3.cleaner","scene":"car_3","id":"cleaner","label":"청소원","kind":"person","sprite":{"source":"/assets/images/characters/cleaner-working.png","rect":[480,425,330,495],"grounded":true,"tone":[0.86,0.84,0.79],"shadows":[[580,889,77,17,80],[697,901,94,20,65]],"occlusion":[[[155,650],[546,656],[550,1052],[433,1052],[433,1121],[0,1121],[0,866],[90,854],[96,805]]]}},
+    {"key":"car3.elder","scene":"car_3","id":"elder","label":"노인","kind":"person","sprite":{"source":"/assets/images/characters/elder-seated.png","rect":[760,485,420,630],"grounded":true,"tone":[0.86,0.84,0.79],"shadows":[[844,838,230,38,82],[833,1091,115,22,72]],"occlusion":[[[1403,854],[1041,857],[1010,866],[1011,892],[1032,910],[1033,1121],[1403,1121]]]}},
+    {"key":"crew-door.attendant","scene":"car_4","id":"attendant","label":"승무원","kind":"person","sprite":{"source":"/assets/images/characters/attendant-standing.png","rect":[110,170,484,726],"grounded":true,"tone":[0.84,0.81,0.76],"shadows":[[281,872,78,17,80],[350,870,80,17,70]]}},
+    {"key":"crew-door.crew_door","scene":"car_4","id":"crew_door","label":"승무원실 출입문 확인","kind":"focus","target":"door","polygon":[[474,60],[879,60],[885,871],[474,871]]},
+    {"key":"crew-door.inspection_cover","scene":"car_4","id":"inspection_cover","label":"오른쪽 하단 점검 덮개 확인","kind":"focus","target":"door","polygon":[[977,606],[1166,606],[1181,621],[1180,804],[1166,819],[980,819],[965,803],[965,620]]},
+    {"key":"crew-door.door_handle","scene":"car_4","id":"door_handle","label":"문손잡이 확인","kind":"focus","target":"door","polygon":[[490,460],[522,455],[530,493],[589,499],[604,507],[594,518],[530,520],[529,572],[519,587],[490,583],[483,568],[483,474]]},
+    {"key":"crew.report","scene":"crew","id":"report","label":"책상 위 운행 서류 읽기","kind":"read_report","target":"","polygon":[[388,1354],[574,1337],[665,1347],[647,1368],[622,1391],[594,1418],[566,1440],[309,1429],[310,1406],[333,1387]]},
+    {"key":"engine.control","scene":"engine","id":"control","label":"분기기 제어 장치 확인","kind":"focus","target":"control","polygon":[[1203,447],[1390,428],[1412,436],[1418,663],[1399,690],[1222,675],[1204,666]]},
+    {"key":"engine.engine-lever","scene":"engine","id":"engine_lever","label":"제어 장치 레버 확인","kind":"focus","target":"control","polygon":[[1385,477],[1406,473],[1422,483],[1426,508],[1419,539],[1407,570],[1416,594],[1432,611],[1435,640],[1416,669],[1413,698],[1427,720],[1439,743],[1435,779],[1401,792],[1364,788],[1328,776],[1318,755],[1324,732],[1343,718],[1345,691],[1348,671],[1338,653],[1340,627],[1355,599],[1366,578],[1374,541],[1375,510]]},
+    {"key":"engine.driver","scene":"engine","id":"driver","label":"기관사","kind":"person","sprite":{"source":"/assets/images/characters/driver-at-controls.png","rect":[515,430,427,451],"grounded":true,"tone":[0.88,0.85,0.79],"shadows":[[592,693,210,32,65]],"occlusion":[[[466,896],[471,859],[490,841],[504,836],[505,786],[513,756],[532,733],[558,719],[594,710],[743,709],[799,716],[833,732],[852,756],[864,782],[867,838],[892,845],[920,869],[927,900],[925,976],[905,1025],[864,1061],[814,1084],[514,1084],[478,1061],[465,1020]]]}}
+  ]
+}

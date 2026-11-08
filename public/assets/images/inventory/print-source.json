@@ -18,7 +18,7 @@
         ],
         [
           "출발 시각",
-          "23:59"
+          "22:00"
         ]
       ],
       "paragraphs": [
@@ -29,12 +29,12 @@
       "artwork": "/assets/images/inventory/records/ticket-current.png"
     },
     {
-      "eyebrow": "2026 · 실종 10년 추적 기사",
-      "title": "23시 59분 출발 열차, 흔적도 없이 사라져",
+      "eyebrow": "2016.11.13 · 실종 사건 기사",
+      "title": "23시 59분 실종 열차, 흔적도 없이 사라져",
       "fields": [
         [
           "발행 연도",
-          "2026"
+          "2016.11.13"
         ],
         [
           "자료 속 열차 번호",
@@ -46,7 +46,7 @@
         ]
       ],
       "paragraphs": [
-        "서울역에서 23시 59분에 출발한 열차가 흔적도 없이 사라졌다. 사진 속 열차에는 13-Fri라는 식별명이 남아 있다.",
+        "서울역을 출발한 열차가 23시 59분에 흔적도 없이 실종됐다. 사진 속 열차에는 13-Fri라는 식별명이 남아 있다.",
         "도착해야 할 역의 이름은 기록에서 확인할 수 없다."
       ],
       "image": "/assets/images/evidence_01.png",
@@ -81,6 +81,40 @@
       "artwork": "/assets/images/inventory/records/facility-manual.png"
     },
     {
+      "eyebrow": "FOUND PAPER",
+      "title": "바랜 종이",
+      "fields": [
+        [
+          "표면 글자",
+          "Invitation"
+        ]
+      ],
+      "paragraphs": [
+        "누렇게 바랜 종이에 장식 테두리와 꽃무늬가 남아 있다. 가운데에는 ‘Invitation’이라는 글자가 보인다.",
+        "종이가 바랬다는 특징은 비슷하지만, 노인이 잃어버린 승차권은 아니다."
+      ],
+      "id": "faded_paper",
+      "kind": "faded-paper",
+      "artwork": "/assets/images/inventory/records/faded-paper.png"
+    },
+    {
+      "eyebrow": "FOUND RECEIPT",
+      "title": "구멍 난 영수증",
+      "fields": [
+        [
+          "종이 종류",
+          "영수증"
+        ]
+      ],
+      "paragraphs": [
+        "구겨진 영수증 가운데가 찢어져 구멍이 나 있다. 아래쪽 가장자리도 크게 뜯겨 있다.",
+        "구멍이 있다는 특징은 비슷하지만, 노인이 잃어버린 승차권은 아니다."
+      ],
+      "id": "punched_receipt",
+      "kind": "punched-receipt",
+      "artwork": "/assets/images/inventory/records/punched-receipt.png"
+    },
+    {
       "eyebrow": "ARCHIVED TICKET",
       "title": "오래된 승차권",
       "fields": [
@@ -98,7 +132,7 @@
         ],
         [
           "출발 시각",
-          "23:59"
+          "22:00"
         ],
         [
           "예정 도착",
@@ -192,7 +226,7 @@
         ],
         [
           "출발 시각",
-          "23:59"
+          "22:00"
         ],
         [
           "예정 도착",

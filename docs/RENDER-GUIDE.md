@@ -47,7 +47,7 @@
 | Key | Value |
 | --- | --- |
 | `OPENAI_API_KEY` | 운영진이 제공한 API 키 |
-| `OPENAI_MODEL` | `gpt-4o-mini` |
+| `OPENAI_MODEL` | 기존에 사용 중인 모델 값. 2026-11-08 실제 검수 설정은 `gpt-6-luna` |
 
 실제 모델 대화에는 API 키가 필요합니다. 원본 파일은 Git에 넣지 않고 플랫폼의 비밀 환경 변수로 전달합니다. `PORT`는 Render가 서비스 실행 환경에 제공하므로 직접 고정하지 말고 앱이 환경 변수 값을 사용하도록 둡니다. 비밀 값은 README·저장소·빌드 명령에 적지 마세요. [Render 환경 변수 설정](https://render.com/docs/configure-environment-variables)
 
