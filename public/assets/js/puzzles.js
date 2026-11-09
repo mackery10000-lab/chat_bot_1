@@ -19,6 +19,10 @@
       oscillator.start(start); oscillator.stop(start + duration);
     } catch { /* Audio is optional. */ }
   }
+  // Both levers share the recorded lever sound; the synthesized clunk is only a fallback.
+  function leverSound(freq) {
+    if (window.TrainAudio?.playEffect) window.TrainAudio.playEffect('lever'); else tick(freq, .2, .12);
+  }
   function mount(host, name, markup) {
     const root = host.attachShadow({mode: 'open'});
     const css = document.createElement('link');
@@ -78,7 +82,7 @@
     async function operate(target) {
       if (waiting || externalBusy) return;
       waiting = true;
-      if (target === 'lever_down') { lever.classList.add('is-down'); tick(160, .2, .12); }
+      if (target === 'lever_down') { lever.classList.add('is-down'); leverSound(160); }
       for (const button of root.querySelectorAll('button')) button.disabled = true;
       try { await options.onOperate(target); }
       finally { waiting = false; if (host.isConnected) render(); }
@@ -188,7 +192,7 @@
       if (blocked()) return;
       if (!station.value.trim()) { status.textContent = '도착역을 먼저 적어 주세요.'; station.focus(); return; }
       changed(); waiting = true; updateBusy();
-      lever.classList.add('is-down'); tick(220, .18, .12);
+      lever.classList.add('is-down'); leverSound(220);
       status.textContent = '입력 내용을 확인하고 있다…';
       try { await options.onSubmit({destination: station.value.trim(), password: values.join('')}); }
       finally { waiting = false; if (host.isConnected) { lever.classList.remove('is-down'); updateBusy(); } }

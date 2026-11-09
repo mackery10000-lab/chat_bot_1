@@ -245,7 +245,7 @@ function apply(data, force = false, interaction = null) {
   const layer=$('character-layer');layer.replaceChildren();
   const people=state.npc?scene.people.filter(p=>p.active):scene.people;
   people.forEach(p=>{
-    if(!p.active&&p.registration){registeredHotspot(layer,p,()=>act('select_npc',{target:p.id}),true);return;}
+    if(!p.active&&p.registration){registeredHotspot(layer,p,()=>{if(!busy)window.TrainAudio?.playEffect('person-select');act('select_npc',{target:p.id});},true);return;}
     const b=button('',()=>act('select_npc',{target:p.id}),'person-hotspot'+(p.active?' talking':''),true);b.dataset.npc=p.id;
     b.setAttribute('aria-label',p.name+'에게 말 걸기');b.setAttribute('aria-controls','dialogue-box');b.title=p.name+' · 대화 시작';
     const bounds=p.active?[31,3,38,97]:p.bounds;place(b,bounds);
@@ -546,6 +546,7 @@ function openInventory(doc = null, keepCatalogPage = false) {
   const body=openOverlay('보관함','inventory');
   overlay.dataset.inventoryMode=selected?'detail':'overview';
   if(!selected){
+    shownDocument=null;
     const book=node('section','inventory-overview');book.setAttribute('aria-label','낡은 수집품 기록장');
     book.append(node('h3','visually-hidden','INVENTORY · 소지품'));
     const grid=node('div','inventory-grid');grid.setAttribute('aria-label','소지품 목록');
@@ -589,7 +590,14 @@ async function openItem(id) {
   if(state.status!=='playing') { try { const data=await request('/api/item/'+encodeURIComponent(id));openInventory(data.document); }catch(e){setError(e.message,false);} return; }
   await act('read_item',{target:id});
 }
+// Paper documents rustle once when they come into view, not on every re-render of the same page.
+const pagedDocuments=new Set(['route_report','newspaper','facility_manual']);
+let shownDocument=null;
+['page-turn','person-select','lever','door-clunk'].forEach(name=>window.TrainAudio?.preloadEffect(name));
+overlay.addEventListener('close',()=>{shownDocument=null;});
 function renderDocument(page,doc) {
+  if(pagedDocuments.has(doc.id)&&shownDocument!==doc.id)window.TrainAudio?.playEffect('page-turn');
+  shownDocument=doc.id;
   const record=node('img','inventory-record-image');
   record.src=doc.artwork||'/assets/images/inventory/records/'+doc.id.replaceAll('_','-')+'.png';
   record.alt=[doc.title,...(doc.paragraphs||[]),...(doc.fields||[]).map(([key,value])=>key+': '+value)].join('\n');
@@ -636,7 +644,7 @@ function openLever() {
     door:state.door,
     onOperate:target=>act('operate',{target}),
     onInventory:()=>openInventory(),
-    onEnter:async()=>{const data=await act('move',{target:'crew'});if(data?.game.location.id==='crew')overlay.close();}
+    onEnter:async()=>{const data=await act('move',{target:'crew'});if(data?.game.location.id==='crew'){window.TrainAudio?.playEffect('door-clunk');overlay.close();}}
   }).setBusy(busy);
 }
 function openControl() {
