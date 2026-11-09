@@ -100,7 +100,7 @@ body {
   overflow: hidden;
 }
 
-/* ---------- 천장 등 (둥근 유리 돔 + 놋쇠 받침) ---------- */
+/* ---------- 천장 등 (청동 받침 + 우윳빛 오팔 유리 돔) ---------- */
 .ceiling {
   width: 100%;
   display: flex;
@@ -113,56 +113,77 @@ body {
 
 .lamp { display: flex; flex-direction: column; align-items: center; }
 
-.lamp__mount {                          /* 천장에 붙은 놋쇠 판 */
-  width: 60px;
-  height: 7px;
-  border-radius: 0 0 4px 4px;
-  background: linear-gradient(180deg, #9A7A48, #5A4426);
-}
-
-.lamp__shade {                          /* 아래로 둥근 유리 갓 */
+/* 천장에 붙은 넓은 청동 받침 + 아래로 좁아지는 계단형 칼라 */
+.lamp__mount {
   position: relative;
-  width: 50px;
-  height: 30px;
-  border: 1px solid #6B4A22;
-  border-top: none;
-  border-radius: 0 0 25px 25px / 0 0 28px 28px;
-  overflow: hidden;
-  background: radial-gradient(ellipse 70% 90% at 50% 20%, #FFF0C8 0%, #FFC062 45%, #C2752A 100%);
-  box-shadow: 0 12px 40px 14px rgba(255, 165, 65, 0.3), 0 40px 160px 60px rgba(255, 150, 60, 0.1);
+  width: 78px;
+  height: 8px;
+  border-radius: 0 0 6px 6px / 0 0 5px 5px;
+  background: linear-gradient(180deg, #2A1C10 0%, #5E4226 45%, #9A7444 72%, #4A321B 100%);
+  box-shadow: 0 1px 0 #00000080;
 }
-/* 유리에 들어간 세로 살과 가로 띠 */
-.lamp__shade::before {
+.lamp__mount::before,
+.lamp__mount::after {
   content: "";
   position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(90deg, transparent 0 9px, rgba(110, 70, 25, 0.45) 9px 10.5px);
+  left: 50%;
+  transform: translateX(-50%);
 }
-.lamp__shade::after {
+.lamp__mount::before {                  /* 받침 아래 첫 단 */
+  top: 100%;
+  width: 60px;
+  height: 6px;
+  border-radius: 0 0 4px 4px;
+  background: linear-gradient(180deg, #33230F 0%, #7E5E36 55%, #4E3519 100%);
+}
+.lamp__mount::after {                   /* 유리를 물고 있는 둘째 단 */
+  top: calc(100% + 6px);
+  width: 50px;
+  height: 7px;
+  border-radius: 0 0 3px 3px;
+  background: linear-gradient(180deg, #2E1F10 0%, #A8804C 45%, #6A4B28 72%, #36240F 100%);
+}
+
+.lamp__shade {                          /* 우윳빛 오팔 유리 돔 */
+  position: relative;
+  width: 50px;
+  height: 40px;
+  margin-top: 13px;
+  border-radius: 48% 48% 50% 50% / 26% 26% 74% 74%;
+  overflow: hidden;
+  background: radial-gradient(ellipse 80% 70% at 50% 62%, #FFFFFF 0%, #FBF6EC 35%, #E6DCCB 68%, #B9AC98 100%);
+  box-shadow: 0 10px 34px 12px rgba(255, 236, 200, 0.28), 0 36px 150px 60px rgba(255, 214, 160, 0.1);
+}
+/* 칼라 아래 유리 윗부분의 그늘 */
+.lamp__shade::before {
   content: "";
   position: absolute;
   left: 0;
   right: 0;
-  top: 12px;
-  height: 1.5px;
-  background: rgba(110, 70, 25, 0.5);
+  top: 0;
+  height: 9px;
+  background: linear-gradient(180deg, rgba(120, 95, 60, 0.45), transparent);
+}
+/* 왼쪽 위 유리 반사광 */
+.lamp__shade::after {
+  content: "";
+  position: absolute;
+  left: 9px;
+  top: 10px;
+  width: 9px;
+  height: 16px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(255, 255, 255, 0.85), transparent 70%);
 }
 
-.lamp__finial {                         /* 갓 아래 작은 놋쇠 꼭지 */
-  width: 14px;
-  height: 5px;
-  margin-top: -1px;
-  border-radius: 0 0 4px 4px;
-  background: #8A6A3A;
-}
+.lamp__finial { display: none; }        /* 사진의 등에는 아래 꼭지가 없다 */
 
 .lamp--off .lamp__shade {
-  background: radial-gradient(ellipse 70% 90% at 50% 25%, #6E5232 0%, #4A361F 55%, #2E2114 100%);
-  box-shadow: 0 8px 22px 4px rgba(255, 150, 60, 0.08);
+  background: radial-gradient(ellipse 80% 70% at 50% 62%, #8E877B 0%, #6C655A 45%, #4A443B 80%, #322D27 100%);
+  box-shadow: 0 8px 22px 4px rgba(255, 230, 190, 0.05);
 }
+.lamp--off .lamp__shade::after { opacity: 0.3; }
 .lamp--flicker .lamp__shade {
-  background: radial-gradient(ellipse 70% 90% at 50% 20%, #FFF3D0 0%, #FFC56E 45%, #C77A2C 100%);
-  box-shadow: 0 12px 40px 14px rgba(255, 170, 70, 0.35), 0 40px 160px 60px rgba(255, 150, 60, 0.12);
   animation: bulbFlicker 5.5s infinite;
 }
 
@@ -360,13 +381,6 @@ body {
 .sign__line--gold2 { inset: 12px; --o: 18px; background: var(--brass-line); }
 .sign__line--fill2 { inset: 13px; --o: 19px; background: var(--red-bg); box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.18); }
 
-.sign__platform {
-  padding-left: 0.32em;
-  font: 600 12px var(--font-title);
-  letter-spacing: 0.32em;
-  color: #B09254;
-}
-
 /* 간판 제목 "운행 종료 불가" */
 .sign__title {
   width: min(100%, 265px);
@@ -374,21 +388,6 @@ body {
   line-height: 0;
 }
 .sign__title-logo { display: block; width: 100%; height: auto; }
-
-/* 영어 부제 "NO LAST STOP": 양옆 금색 선 */
-.sign__subtitle {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin: 0;
-  font: 600 clamp(12px, 1.8vw, 16px) var(--font-serif-en);
-  letter-spacing: clamp(0.2em, 1vw, 0.42em);
-  white-space: nowrap;
-  color: #B09254;
-}
-.sign__subtitle::before,
-.sign__subtitle::after { content: ""; width: clamp(16px, 6vw, 72px); height: 1px; background: currentColor; }
-.sign__subtitle::after { margin-left: calc(-1 * clamp(0.2em, 1vw, 0.42em)); }
 
 /* 유령 글자: 연한 회색, 한 글자씩 흐려지며 사라졌다 돌아옴 */
 .ghost {
