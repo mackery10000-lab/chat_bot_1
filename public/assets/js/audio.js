@@ -81,6 +81,8 @@
     sync();
   });
   // Effects follow the title screen's 효과음 slider, independent of the music toggle.
+  // Recorded effects are mastered loud; keep them well under the music.
+  const effectGain = 0.45;
   const effects = new Map();
   function effect(name) {
     if (!effects.has(name)) {
@@ -94,7 +96,7 @@
     const level = clamp(read(localStorage, settingsKey, {}).sfx ?? 60);
     if (!level) return;
     const clip = effect(name).cloneNode();
-    clip.volume = level / 100;
+    clip.volume = level / 100 * effectGain;
     clip.play().catch(() => {});
   }
   window.TrainAudio = Object.freeze({

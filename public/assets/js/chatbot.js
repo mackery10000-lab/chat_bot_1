@@ -54,6 +54,7 @@ function acquisition(events) {
 function showAcquisition() {
   if(acquisitionActive||!acquisitionQueue.length)return;
   acquisitionActive=true;const item=acquisitionQueue.shift(),card=$('acquisition-notice');card.replaceChildren();
+  window.TrainAudio?.playEffect('clue-coin');
   const art=node('div','acquired-icon');art.append(inventoryArt(item));
   const copy=node('div','acquired-copy');copy.append(node('small','','소지품 획득'),node('strong','',item.name),node('span','','보관함에 보관되었습니다.'));
   const close=button('×',dismissAcquisition,'acquired-close');close.setAttribute('aria-label','획득 알림 닫기');
@@ -593,7 +594,7 @@ async function openItem(id) {
 // Paper documents rustle once when they come into view, not on every re-render of the same page.
 const pagedDocuments=new Set(['route_report','newspaper','facility_manual']);
 let shownDocument=null;
-['page-turn','person-select','lever','door-clunk'].forEach(name=>window.TrainAudio?.preloadEffect(name));
+['page-turn','person-select','lever','door-clunk','clue-coin'].forEach(name=>window.TrainAudio?.preloadEffect(name));
 overlay.addEventListener('close',()=>{shownDocument=null;});
 function renderDocument(page,doc) {
   if(pagedDocuments.has(doc.id)&&shownDocument!==doc.id)window.TrainAudio?.playEffect('page-turn');
