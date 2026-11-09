@@ -5,7 +5,7 @@
 | 인물 | 탐색용 이미지 | 원본 캔버스 배치 `[x,y,w,h]` | 배경과 연결 |
 | --- | --- | --- | --- |
 | 탐험가 | `public/assets/images/characters/explorer-seated.png` | `[160,485,420,630]` | 왼쪽 좌석 쿠션에 앉은 자세. 다친 발을 아래로 내리고, 가까운 좌석 테두리가 다리 일부를 가림 |
-| 노인 | `public/assets/images/characters/elder-seated.png` | `[760,485,420,630]` | 오른쪽 쿠션에 앉아 지팡이를 잡음. 보이는 신발을 통로 위로 맞추고 앞좌석 테두리 가림 적용 |
+| 노인 | `public/assets/images/characters/elder-seated-v4.png` | `[860,495,380,570]` | 사용자가 승인한 그림·다리 방향을 보존하고 골반을 오른쪽 벤치 쿠션 중앙으로 이동. 기존 앞좌석이 가까운 무릎 일부를 자연스럽게 가림 |
 | 청소원 | `public/assets/images/characters/cleaner-working.png` | `[480,425,330,495]` | 통로 왼쪽에서 몸을 숙여 걸레질. 다리·신발·걸레가 이어지며 바닥에 접촉 |
 | 승무원 | `public/assets/images/characters/attendant-standing.png` | `[110,170,484,726]` | 출입문 왼쪽에 서며 발은 문턱의 바닥 높이, 키는 문 높이에 맞춤. 문·손잡이·점검 덮개를 가리지 않음 |
 | 기관사 | `public/assets/images/characters/driver-at-controls.png` | `[515,430,427,451]` | 중앙 운전석에 앉아 몸을 전방으로 향하고 뒤돌아봄. 의자 등받이가 하체를 가리며 오른손은 레버 높이에 맞춤 |
@@ -31,3 +31,19 @@
 최종 [브라우저 검사](../.local/gameplay-ui-qa/1794133744230/result.json) 227개가 통과했다. [인물 윤곽 진단](../.local/gameplay-ui-qa/1794133744230/actor-hit-metrics.json)은 세 화면 크기에서 불투명 인물 6,806개·투명/가림 6,708개 표본의 누락과 오작동이 모두 0이었다. 뒤쪽 닫힌 기록철을 실제로 눌러도 문서가 열리지 않고 운행 서류만 조사되는지 확인했다. JavaScript 예외와 자산 요청 실패도 없다. 최종 모바일 화면과 대화 전후 화면은 같은 검사 폴더에 있다.
 
 Python 회귀 검사 186개, JavaScript 구문, 실행기 준비 검사를 통과했다. 비교용 작업 전 자산과 배치·해시 기록은 `.local/character-placement/`, 승무원·기관사 추가 보정 기록은 `.local/staff-placement/`에 있다.
+
+## 노인 앉은 자세 추가 보정
+
+`elder-seated-v2.png`는 기존 인물의 얼굴과 옷을 유지하고 실제 좌석 방향에 맞는 옆으로 앉은 자세로 다시 생성했다. 발을 바닥으로 내리고 골반·허벅지를 좌석 쿠션에 맞췄다. 기존 청소원과 걸레를 가리지 않게 배치하고 새 알파 윤곽으로 클릭 영역을 재등록했다. 다른 12개 레이어는 재생성하지 않았다.
+
+최신 [장면 검사](../.local/gameplay-ui-qa/1794149365335/result.json) 227개가 통과했다. [클릭 진단](../.local/gameplay-ui-qa/1794149365335/actor-hit-metrics.json)의 불투명 표본 7,395개와 투명·가림 표본 7,596개에서 누락·잘못된 클릭은 모두 0이다. 생성 도구·저장 경로·최종 프롬프트는 [인물 자산 기록](../public/assets/images/characters/README.md)의 추가 보정 부분에 있다. 전체 변경·검증은 [화면 수정 기록](PRESENTATION_UPDATE.md)에 정리했다.
+
+이후 사용자 원화의 선화·얼굴·의상에 맞춘 `elder-seated-v3.png`로 노인만 교체했다. 좌표·톤·그림자·가림과 기존 시스템은 유지하고 새 그림의 클릭 윤곽만 재등록했다. [최신 장면 검사](../.local/gameplay-ui-qa/1794150413117/result.json) 227개와 관련 서버 검사 5개가 통과했다. 불투명 7,430개·투명/가림 7,603개 표본에서 누락·오작동은 0이며, 다른 인물·배경·UI·서버 코드의 해시가 이번 수정 전과 같다. [최종 생성 프롬프트와 자산 기록](../public/assets/images/characters/ELDER_REFERENCE_PROMPT.md).
+
+## 노인 좌석 중앙 배치
+
+사용자가 승인한 `elder-seated-v4.png`의 그림과 전방·약간 오른쪽을 향하는 다리 방향을 유지했다. 원본 이미지의 SHA256은 `FC417A2006564E18887E5109F3736B2DF9A240FF6EB9D7F31DC70D67C785BFBF`로 수정 전후 동일하다. 원본 캔버스의 배치를 `[780,495,380,570]`에서 `[860,495,380,570]`으로 80px 오른쪽 이동해 골반을 통로 쪽 팔걸이에서 벤치 쿠션 중앙으로 옮겼다. 크기·세로 높이·색조·앞좌석 가림은 그대로 두고 접촉 그림자만 같은 거리만큼 이동했다.
+
+`tools/build_scene_assets.ps1 -Keys car3.elder`로 노인 레이어와 그 알파에 맞는 클릭 윤곽만 재생성했다. 다른 12개 등록과 장면 PNG, 배경 정의는 수정 전과 같음을 [범위 비교](../.local/elder-seat-centering/scope-check.json)로 확인했다. [전체 합성 미리보기](../.local/elder-seat-centering/centered-composite.png)에서 좌석 쿠션과 골반·허벅지 접촉, 앞좌석의 가림을 확인했다.
+
+최신 [장면 검사](../.local/gameplay-ui-qa/1794153068244/result.json) 227개가 1440·390·320px에서 통과했다. 노인과 다른 인물의 클릭·키보드 대화·대화 종료·투명 영역 통과·문 이동·손전등 가림을 검증했다. [인물 윤곽 진단](../.local/gameplay-ui-qa/1794153068244/actor-hit-metrics.json)과 [모바일 배치](../.local/gameplay-ui-qa/1794153068244/scene-car_3-390.png)를 함께 남겼다.

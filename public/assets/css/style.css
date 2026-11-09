@@ -143,8 +143,6 @@
 .chat-page .dialogue-close:hover{filter:sepia(.15) brightness(1.15);transform:rotate(0) scale(1.06)}
 .chat-page .dialogue-close:focus-visible{outline:2px solid #edd4a0;outline-offset:2px}
 .chat-page .conversation-console{margin-top:12px}
-.chat-page .conversation-active .conversation-console{width:min(100%,max(var(--conversation-scene-width,100%),600px));margin-left:auto;margin-right:auto}
-.chat-page .conversation-active .scene-frame{width:min(100%,var(--conversation-scene-width,100%));margin-left:auto;margin-right:auto;container:conversation-scene / inline-size}
 .chat-page .console-main{display:grid;grid-template-columns:1fr 1.12fr;gap:14px;align-items:center}
 .chat-page .console-main:has(>.hints-and-choices[hidden]){grid-template-columns:1fr}
 .chat-page .hints-and-choices{display:grid;gap:8px;min-width:0}
@@ -272,11 +270,6 @@
  .chat-page .dialogue-open .conversation-badge{top:calc(var(--scene-inset-y) + var(--scene-icon) + 8px);right:8px;left:auto;bottom:auto}
  .chat-page .conversation-badge>span{display:none}
  .chat-page .conversation-badge button{font-size:8px;padding:5px 7px}
-}
-@media(max-height:600px) and (min-width:601px){
- .chat-page .game-shell.conversation-active{padding-top:6px;padding-bottom:6px}
- .chat-page .conversation-active .train-map-bar{margin-bottom:6px}
- .chat-page .conversation-active .conversation-console{margin-top:6px}
 }
 @media(prefers-reduced-motion:reduce){.chat-page .registered-visual{transition:none}}
 .chat-page.reduced-motion .registered-visual{transition:none}

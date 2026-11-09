@@ -13,6 +13,9 @@ import app as web
 from services.chatbot_service import ChatbotService
 
 class LocalModel:
+    def generate_loading_lore(self, context):
+        return '무거운 커튼 사이로 밤의 어둠이 스며들고, 객차에는 바퀴가 선로를 지나는 소리가 남습니다.'
+
     def interpret(self,message,context):
         descriptions={
             '누렇게 바랜 종이입니다.':['faded'],
@@ -71,6 +74,8 @@ def seed():
     elif phase=='cleaner_items':
         state.update(npc='cleaner',pending_dialogue='describe_ticket',
                      inventory=['ticket_current','newspaper','flashlight','facility_manual','elder_testimony'])
+    elif phase in ('ending_good','ending_bad'):
+        state.update(status=phase[7:],location='engine',npc='',attempts=0)
     elif phase.startswith('scene_') and phase[6:] in ('car_1','car_2','car_3','car_4','crew','engine'):
         state['location']=phase[6:]
         state['flags'].update(notice_read=True, report_found=True, report_read=True,

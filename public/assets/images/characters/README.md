@@ -9,6 +9,9 @@ tool output into the workspace without changing their alpha.
 | --- | --- | --- |
 | `public/assets/images/characters/explorer-seated.png` | `portrait_01.png` | 1024×1536 |
 | `public/assets/images/characters/elder-seated.png` | `portrait_02.png` | 1024×1536 |
+| `public/assets/images/characters/elder-seated-v2.png` (previous refinement) | `elder-seated.png` + `car1/background.png` | 1086×1448 |
+| `public/assets/images/characters/elder-seated-v3.png` (previous refinement) | User's original character sheet; carriage lighting and previous placement | 1086×1448 |
+| `public/assets/images/characters/elder-seated-v4.png` (current exploration asset) | User's seated original drawing; carriage seat direction and lighting | 1024×1536 |
 | `public/assets/images/characters/cleaner-working.png` | `portrait_03.png` | 1024×1536 |
 | `public/assets/images/characters/attendant-standing.png` | `portrait_04.png` + `scenes/crew-door.png` | 1024×1536 |
 | `public/assets/images/characters/driver-at-controls.png` | `portrait_05.png` + `scenes/engine.png` | 1221×1289 |
@@ -47,3 +50,19 @@ Cleaner:
 Shared suffix:
 
 > Output exactly one isolated person on genuinely transparent background. Preserve alpha. Do not draw any background, typography, border, labels, pedestal or drop shadow plate. Do not copy the old brown portrait backdrop. No unrelated props.
+
+## Elder seating refinement
+
+Saved path: `public/assets/images/characters/elder-seated-v2.png`.
+
+Created with the built-in `image_gen` tool and `transparent_background: true`; no CLI/API image generation was used. Input 1 (`elder-seated.png`) supplied the existing man's identity and clothes. Input 2 (`car1/background.png`) supplied the shared passenger carriage's camera, right-seat perspective and lighting. The full generated alpha is preserved.
+
+Final prompt specification:
+
+Use case: identity-preserve. Asset type: transparent exploration NPC sprite. Preserve the same elderly Korean man: deeply wrinkled face, untidy grey hair, worn brown jacket, checked shirt, dark trousers, shoes, wooden cane and bag. Rebuild his pose as a natural three-quarter side view, sitting on the train's RIGHT bench. Pelvis at the right, thighs resting horizontally on an invisible seat, knees directed diagonally left into the aisle, lower legs descending naturally, both soles on the same floor. Hands rest on the cane; bag lies outside the right hip. Use supported seated anatomy, no floating squat or oversized knees. Include the complete body, shoes and cane tip. Match the warm amber overhead lighting and softly painterly materials of the supplied carriage. Portrait 3:4 tight transparent cutout with a small margin. No chair, bench, background, floor plane, halo, old brown portrait backdrop, text or label.
+
+The current layout rectangle is `[700,500,410,565]`. Shadows sit beneath the seat and both feet; the existing foreground right-seat mask is retained. `tools/build_scene_assets.ps1 -Keys car3.elder` rebuilds only its full-canvas layer and hit outline, preserving other registrations. Dialogue portraits remain the original assets.
+
+The latest `elder-seated-v3.png` follows the user's original character sheet more closely: a narrow weathered face, tired eyelids, dark knitted waistcoat, deliberate ink lines and matte painted shadows. It retains the same placement and scene tone. Its exact built-in generation prompt and asset path are in [ELDER_REFERENCE_PROMPT.md](ELDER_REFERENCE_PROMPT.md).
+
+The current `elder-seated-v4.png` corrects the lower-body direction to follow the right bench: almost front-facing, knees and shoes slightly to screen right, rather than a side pose pointing left into the aisle. Its rectangle is `[780,495,380,570]`, preserving the native 2:3 proportions. It uses the existing foreground seat mask and adjusted contact shadows. [Final prompt and integration notes](ELDER_FORWARD_PROMPT.md).

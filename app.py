@@ -13,6 +13,7 @@ from flask import Flask, jsonify, render_template, request, url_for
 from services import ChatbotService
 from services.chatbot_service import GameError
 from services.generator import AIUnavailable
+from services.loading_lore import LoadingLoreService
 
 BASE_DIR = Path(__file__).resolve().parent
 CONFIG_PATH = BASE_DIR / "config/chatbot_config.json"
@@ -26,6 +27,7 @@ app = Flask(
 app.config["MAX_CONTENT_LENGTH"] = 16384
 chatbot = ChatbotService()
 COOKIE = "train_game"
+loading_lore = LoadingLoreService()
 
 
 def asset_url(filename: str) -> str:
@@ -162,6 +164,13 @@ def new_game():
 def item_view(item_id):
     state = chatbot.store.get(game_id())
     return jsonify({"document": chatbot.engine.document(state, item_id)})
+
+
+@app.post("/api/loading-text")
+def loading_text():
+    gid = game_id()
+    state = chatbot.store.get(gid)
+    return jsonify(loading_lore.get(gid, state, chatbot.generator))
 
 
 @app.post("/api/chat")

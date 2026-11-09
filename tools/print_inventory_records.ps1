@@ -41,6 +41,10 @@ $staging=Join-Path $root '.local/inventory-record-build'
 $fonts=[Drawing.Text.PrivateFontCollection]::new()
 $fonts.AddFontFile((Join-Path $root 'public/assets/css/NanumMyeongjo-ExtraBold.ttf'))
 $family=$fonts.Families[0]
+$testimonyFonts=[Drawing.Text.PrivateFontCollection]::new()
+$testimonyFonts.AddFontFile((Join-Path $root 'public/assets/css/NanumGothic.ttf'))
+$testimonyFonts.AddFontFile((Join-Path $root 'public/assets/css/NanumGothicBold.ttf'))
+$testimonyFamily=$testimonyFonts.Families[0]
 $ink=[Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(233,47,40,29))
 $muted=[Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(205,65,55,39))
 $rule=[Drawing.Pen]::new([Drawing.Color]::FromArgb(112,78,62,40),1.3)
@@ -91,6 +95,26 @@ function Write-RecordRule([double]$y,[bool]$heavy=$false) {
 }
 function Write-RecordParagraph([string]$text,[double]$y,[double]$size=34,[double]$leading=45) {
     return (Write-RecordText $text 46 $y 808 $size $leading)+14
+}
+function Write-TestimonyParagraph([string]$text,[double]$y) {
+    $regular=[Drawing.Font]::new($testimonyFamily,34,[Drawing.FontStyle]::Regular,[Drawing.GraphicsUnit]::Pixel)
+    $bold=[Drawing.Font]::new($testimonyFamily,34,[Drawing.FontStyle]::Bold,[Drawing.GraphicsUnit]::Pixel)
+    $start=$y;$x=46.0;$line='';$emphasis=[Collections.Generic.List[string]]::new()
+    foreach($match in [regex]::Matches($text,'바랜\s*종이|구멍|.')) {
+        $part=$match.Value;$highlight=$part -match '^(바랜\s*종이|구멍)$'
+        $font=if($highlight){$bold}else{$regular}
+        $width=$g.MeasureString($part,$font,[Drawing.PointF]::new(0,0),$format).Width
+        if($x+$width -gt 854) {
+            $script:drawn.Add(@{text=$line;x=46;y=$y;width=$x-46;size=34;leading=44;emphasis=@($emphasis.ToArray())})
+            $x=46.0;$y+=44;$line='';$emphasis.Clear()
+        }
+        $g.DrawString($part,$font,$ink,[Drawing.PointF]::new($x,$y),$format)
+        $x+=$width;$line+=$part
+        if($highlight){$emphasis.Add($part)}
+    }
+    if($line.Length){$script:drawn.Add(@{text=$line;x=46;y=$y;width=$x-46;size=34;leading=44;emphasis=@($emphasis.ToArray())});$y+=44}
+    $regular.Dispose();$bold.Dispose()
+    return $y-$start+14
 }
 function Write-RecordFields($fields,[double]$y,[double]$size=34,[double]$leading=44) {
     $start=$y
@@ -182,7 +206,7 @@ foreach($doc in $documents) {
                 $sentences=[regex]::Split([string]$paragraph,'(?<=\.)\s+')
                 foreach($i in 0..($sentences.Count-1)) {
                     [void](Write-RecordText $labels[$i] 46 $y 808 28 38 $muted);$y+=39
-                    $y+=Write-RecordParagraph $sentences[$i] $y 34 44
+                    $y+=Write-TestimonyParagraph $sentences[$i] $y
                     Write-RecordRule $y;$y+=18
                 }
             }
@@ -216,5 +240,5 @@ foreach($doc in $documents) {
 }
 foreach($filename in $rendered){Copy-Item -LiteralPath (Join-Path $staging $filename) -Destination (Join-Path $output $filename)}
 $manifest | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
-$fonts.Dispose();$ink.Dispose();$muted.Dispose();$rule.Dispose();$heavyRule.Dispose();$format.Dispose()
+$fonts.Dispose();$testimonyFonts.Dispose();$ink.Dispose();$muted.Dispose();$rule.Dispose();$heavyRule.Dispose();$format.Dispose()
 Write-Output "Printed $($rendered.Count) records. Book, item and action images were not modified."
