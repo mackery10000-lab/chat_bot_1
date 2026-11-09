@@ -15,8 +15,16 @@
       <stop offset=".965" stop-color="#3a2410" stop-opacity="0"/>
       <stop offset="1" stop-color="#3a2410" stop-opacity=".55"/>
     </linearGradient>
+    <pattern id="paper-fibres" width="180" height="100" patternUnits="userSpaceOnUse">
+      <path d="M8 19l22 1m39 12 27-1m31-9 30 1M18 43l13-1m29 14 34-1m27-8 19 1M7 77l28 1m37-5 18 1m33 12 38-1" fill="none" stroke="#5e3c20" stroke-opacity=".095" stroke-width=".65"/>
+      <path d="M23 27l32 1m59 7 20-1M10 61l16-1m77 4 40 1M46 88l21-1m65-17 28 1" fill="none" stroke="#fff0d0" stroke-opacity=".21" stroke-width=".8"/>
+      <g fill="#6e4d2e" fill-opacity=".11"><circle cx="43" cy="37" r=".65"/><circle cx="108" cy="79" r=".5"/><circle cx="159" cy="55" r=".65"/><circle cx="65" cy="16" r=".55"/></g>
+    </pattern>
   </defs>
   <path fill="url(#roll)" d="M0 4H1000L994 18 1000 31 992 46 1000 60 994 74 1000 96H0L6 74 0 60 8 46 0 31 6 18Z"/>
   <path fill="url(#ends)" d="M0 4H1000L994 18 1000 31 992 46 1000 60 994 74 1000 96H0L6 74 0 60 8 46 0 31 6 18Z"/>
+  <path fill="url(#paper-fibres)" d="M0 4H1000L994 18 1000 31 992 46 1000 60 994 74 1000 96H0L6 74 0 60 8 46 0 31 6 18Z"/>
+  <path fill="none" stroke="#fff0cc" stroke-opacity=".2" stroke-width="1" vector-effect="non-scaling-stroke" d="M11 15C280 12 493 17 720 14S930 16 989 14"/>
+  <path fill="none" stroke="#644426" stroke-opacity=".22" stroke-width="1" vector-effect="non-scaling-stroke" d="M10 88C260 85 481 90 724 87S929 89 990 87"/>
   <path fill="none" stroke="#6b4a26" stroke-opacity=".28" stroke-width="1" vector-effect="non-scaling-stroke" d="M6 70C260 73 480 67 720 71S930 72 994 69"/>
 </svg>

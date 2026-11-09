@@ -341,7 +341,7 @@ def grounded_features(value, message, context=None):
 class DemoGenerator:
     """베이스의 클래스명과 generate 문자열 반환 계약을 보존한다."""
 
-    def _complete(self, instructions, payload, schema=None):
+    def _complete(self, instructions, payload, schema=None, *, timeout=22.0, max_output_tokens=None):
         values = dotenv_values(Path(__file__).resolve().parents[1] / ".env")
         api_key = os.getenv("OPENAI_API_KEY") or values.get("OPENAI_API_KEY") or ""
         model = os.getenv("OPENAI_MODEL") or values.get("OPENAI_MODEL") or "gpt-4o-mini"
@@ -351,7 +351,7 @@ class DemoGenerator:
             model=model.strip(),
             instructions=instructions,
             input=json.dumps(payload, ensure_ascii=False),
-            max_output_tokens=1200 if schema else 900,
+            max_output_tokens=max_output_tokens or (1200 if schema else 900),
             store=False,
         )
         if model.strip().startswith(("gpt-4o", "gpt-4.1")):
@@ -369,7 +369,7 @@ class DemoGenerator:
             with OpenAI(
                 api_key=api_key,
                 base_url="https://api.openai.com/v1",
-                timeout=22.0,
+                timeout=timeout,
                 max_retries=0,
             ) as client:
                 response = client.responses.create(**options)
@@ -384,6 +384,18 @@ class DemoGenerator:
             raise AIUnavailable(
                 "AI 연결을 완료하지 못했습니다. 인증·한도·연결 상태를 확인한 뒤 다시 시도해 주세요. 진행과 마지막 기회는 보존됩니다."
             ) from None
+
+    def generate_loading_lore(self, context: dict) -> str:
+        return self._complete(
+            "너는 한국어 열차 미스터리 게임의 로딩 문구 작가다. 제공된 공개 배경만 바탕으로 "
+            "세계관의 분위기를 설명하는 담백한 한 문장을 새로 작성한다. 30~85자, 한국어 평서문. "
+            "낡은 목재 객차, 밤, 차창, 선로의 진동, 커튼, 조명 같은 실제 보이는 감각에 집중한다. "
+            "제공되지 않은 사건, 인물, 규칙, 역사, 특권, 목적지, 해법을 만들거나 암시하지 않는다. "
+            "현재 위치는 묘사의 참고일 뿐이고 행동을 지시하거나 단서를 주지 않는다. "
+            "연도, 숫자, 비밀번호, 승차권의 특징, 숨겨진 역 이름, 정답, 엔딩, 스포일러를 쓰지 않는다. "
+            "이전 문구와 다른 표현을 사용한다. 제목, 따옴표, 목록, 마크다운 없이 문장만 출력한다.",
+            context, timeout=8.0, max_output_tokens=600,
+        )
 
     def interpret(self, message: str, context: dict) -> dict:
         if is_setting_attack(message):

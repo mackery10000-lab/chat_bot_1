@@ -9,32 +9,36 @@
  <link rel="preload" as="image" href="{{ asset_url('assets/images/ui/chat-input.png') }}">
  <link rel="preload" as="image" href="{{ asset_url('assets/images/ui/choice-paper.png') }}">
  <link rel="preload" as="image" href="{{ asset_url('assets/images/ui/hint-paper.png') }}">
+ <link rel="preload" as="image" href="{{ asset_url('assets/images/ui/dossier-panel.png') }}">
+ <link rel="preload" as="image" href="{{ asset_url('assets/images/ui/ending-certificate.png') }}">
+ <link rel="preload" as="image" href="{{ asset_url('assets/images/ui/ending-certificate-sad.png') }}">
  <link rel="preload" as="image" href="{{ asset_url('assets/images/ui/train-route-lights-off.webp') }}">
  <link rel="preload" as="image" href="{{ asset_url('assets/images/inventory/book-overview.png') }}">
  <link rel="preload" as="image" href="{{ asset_url('assets/images/inventory/book-detail.png') }}">
  <link rel="preload" as="image" href="{{ asset_url('assets/images/inventory/photo-mount.png') }}">
  <link rel="stylesheet" href="{{ asset_url('assets/css/style.css') }}">
  <link rel="stylesheet" href="{{ asset_url('assets/css/inventory.css') }}">
+ <link rel="stylesheet" href="{{ asset_url('assets/css/game-panels.css') }}">
+ <link rel="stylesheet" href="{{ asset_url('assets/css/train-map.css') }}">
+ <link rel="stylesheet" href="{{ asset_url('assets/css/loading.css') }}">
  <script src="{{ asset_url('assets/js/audio.js') }}" defer></script>
  <script src="{{ asset_url('assets/js/puzzles.js') }}" defer></script>
+ <script src="{{ asset_url('assets/js/loading.js') }}" defer></script>
  <script src="{{ asset_url('assets/js/chatbot.js') }}" defer></script>
 </head>
 <body class="chat-page game-booting">
 
-<header class="game-header">
- <a href="{{ url_for('index') }}" class="game-brand" aria-label="처음으로">13-Fri <span>운행 종료 불가</span></a>
- <div class="header-right"><span class="save-status" id="save-status">기록 불러오는 중</span><button type="button" id="settings-btn" class="text-button">설정</button></div>
-</header>
+<span id="save-status" class="visually-hidden" role="status">기록 불러오는 중</span>
 
 <main class="game-shell chat-area" data-username="{{ username }}">
  <nav class="train-map-bar" aria-label="열차 미니맵">
   <button type="button" id="map-toggle" class="map-toggle" aria-controls="train-map-panel" aria-expanded="true">열차 안내도 접기</button>
   <div id="train-map-panel" class="train-map-panel">
    <div class="train-map-sheet">
-    <div class="map-heading"><span class="map-direction">← 열차 후방</span><span class="map-caption">열차 안내도 <small>13-FRI · NIGHT EXPRESS</small></span><span class="map-direction">열차 전방 →</span></div>
     <div id="train-map" class="linear-map"></div>
    </div>
   </div>
+  <div class="map-roll-edge" aria-hidden="true"></div>
  </nav>
 
  <section class="scene-frame" aria-label="현재 열차 장면">
@@ -70,7 +74,7 @@
   </div>
  </section>
 
- <section class="conversation-console" aria-label="힌트와 자유 채팅">
+ <section class="conversation-console" aria-label="인물과 대화" hidden>
   <div class="console-main">
    <section id="hints-and-choices" class="hints-and-choices" aria-label="행동 선택지와 요청한 힌트">
     <div id="choice-list" class="choice-list" aria-label="선택지" hidden></div>
@@ -83,8 +87,8 @@
    </form>
   </div>
   <div class="input-meta"><span id="current-target">현재 장면에 행동하기</span><span id="reply-status" role="status"></span><span>Enter 전송 · Shift+Enter 줄바꿈</span></div>
-  <div class="error-banner" id="error-banner" role="alert" hidden><span id="error-text"></span><button type="button" id="retry-btn">다시 시도</button><button type="button" id="reload-btn">기록 불러오기</button></div>
  </section>
+ <div class="error-banner" id="error-banner" role="alert" hidden><span id="error-text"></span><button type="button" id="retry-btn">다시 시도</button><button type="button" id="reload-btn">기록 불러오기</button></div>
 </main>
 
 <dialog id="cinematic" class="cinematic-dialog" aria-labelledby="cinematic-title" aria-describedby="cinematic-status">
@@ -95,13 +99,17 @@
 </dialog>
 
 <dialog id="overlay" class="game-dialog" aria-labelledby="overlay-title">
- <header class="overlay-header"><div><span class="eyebrow" id="overlay-eyebrow">13-Fri</span><h2 id="overlay-title">보관함</h2></div><button type="button" id="close-overlay" class="close-button" aria-label="창 닫기">×</button></header>
+ <header class="overlay-header"><div><h2 id="overlay-title">보관함</h2></div><button type="button" id="close-overlay" class="close-button" aria-label="창 닫기">×</button></header>
  <div id="overlay-body"></div>
 </dialog>
 <div id="acquisition-notice" class="acquisition-notice" role="status" aria-live="polite" hidden></div>
 <div id="toast" class="toast" role="status" hidden></div>
 <div id="scene-loading" class="scene-loading" role="status" aria-live="polite" aria-label="장면 로딩" hidden>
- <div class="loading-center"><img class="loading-train" src="{{ asset_url('assets/images/ui/train-route-six-cars.png') }}" alt=""><span>로딩</span></div>
+ <p id="loading-lore" class="loading-lore" data-source="fallback">낡은 목재 객차 안으로 바퀴가 선로를 지나는 낮은 진동이 전해집니다.</p>
+ <div class="loading-indicator" aria-hidden="true">
+  <svg class="loading-eye" viewBox="0 0 64 64"><path class="loading-gear" d="M27 2h10l2 8 5 3 8-3 6 9-6 6v6l8 4-3 10-9-1-5 4-1 9H30l-3-8-6-2-7 5-8-8 4-8-1-6-8-4 3-10 9 1 5-4 1-9Z"/><path d="M11 31Q32 10 53 31Q32 52 11 31Z" fill="#000"/><ellipse cx="32" cy="31" rx="10" ry="11"/><ellipse cx="32" cy="31" rx="4" ry="6" fill="#000"/></svg>
+  <span>로딩 중…</span>
+ </div>
 </div>
 </body>
 </html>

@@ -15,7 +15,7 @@
 
 :host {
   font-family: var(--font-ui);
-  color: #CDB78A;
+  color: var(--puzzle-text, #CDB78A);
 }
 
 .stage {
@@ -31,7 +31,7 @@
 /* 그림 비율을 유지하는 상자. 안의 모든 조작 영역은 % 좌표 */
 .panel {
   position: relative;
-  width: min(100%, 1000px, calc((100dvh - 260px) * 1402 / 1122));
+  width: min(100%, 1000px, calc(var(--puzzle-image-height, calc(100dvh - 260px)) * 1402 / 1122));
   aspect-ratio: 1402 / 1122;
   user-select: none;
   -webkit-user-select: none;
@@ -241,11 +241,11 @@
   min-height: 1.6em;
   font: 400 16px var(--font-ui);
   letter-spacing: 0.06em;
-  color: #CDB78A;
+  color: var(--puzzle-text, #CDB78A);
   text-align: center;
 }
-.status.is-wrong { color: #E0705A; }
-.status.is-right { color: #F2D58E; text-shadow: 0 0 10px rgba(255, 200, 110, 0.5); }
+.status.is-wrong { color: var(--puzzle-error, #E0705A); }
+.status.is-right { color: var(--puzzle-success, #F2D58E); text-shadow: var(--puzzle-status-glow, 0 0 10px rgba(255, 200, 110, 0.5)); }
 
 .help {
   margin: 0;
@@ -253,7 +253,7 @@
   font-size: 13px;
   line-height: 1.6;
   text-align: center;
-  color: #8E7B57;
+  color: var(--puzzle-help, #8E7B57);
 }
 
 @media (prefers-reduced-motion: reduce) {

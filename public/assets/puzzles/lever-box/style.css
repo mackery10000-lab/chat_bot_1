@@ -5,7 +5,7 @@
 }
 
 * { box-sizing: border-box; }
-:host { font-family: var(--font-ui); color: #CDB78A; }
+:host { font-family: var(--font-ui); color: var(--puzzle-text, #CDB78A); }
 
 .stage {
   min-height: 0;
@@ -20,7 +20,7 @@
 /* 그림 비율(1188×798)을 유지하는 상자 */
 .box {
   position: relative;
-  width: min(100%, 1000px, calc((100dvh - 260px) * 1188 / 798));
+  width: min(100%, 1000px, calc(var(--puzzle-image-height, calc(100dvh - 260px)) * 1188 / 798));
   aspect-ratio: 1188 / 798;
   user-select: none;
   -webkit-user-select: none;
@@ -109,6 +109,6 @@ button:disabled { cursor: default; }
 .cover-shade { position: absolute; inset: 0; display: grid; place-items: center; }
 .box:not(.cover-closed) .cover-shade { display: none; }
 .puzzle-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
-.puzzle-actions button, .cover-button { padding: 10px 18px; border: 1px solid #947448; border-radius: 3px; background: #21190f; color: #e4cea3; font-size: 13px; cursor: pointer; }
+.puzzle-actions button, .cover-button { padding: 10px 18px; border: 0 solid transparent; border-image: url('../../images/ui/hint-paper.png') 210 96 214 96 fill / 0 18px 0 18px stretch; border-radius: 0; background: none; color: #e4cea3; font-size: 13px; cursor: pointer; }
 .puzzle-actions button:focus-visible, .cover-button:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
 .puzzle-actions button:disabled { opacity: .5; }

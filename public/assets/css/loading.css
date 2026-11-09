@@ -1,0 +1,18 @@
+/* Viewport-sized black loading screen, independent of the scene canvas. */
+html:has(.scene-loading:not([hidden])){overflow:hidden;scrollbar-gutter:auto}
+.chat-page .scene-loading{position:fixed;inset:0;width:100vw;height:100dvh;z-index:2000;display:block;background:#000;backdrop-filter:none;overflow:hidden;color:#a6a5a2}
+.loading-lore{position:absolute;left:50%;bottom:max(130px,24dvh);transform:translateX(-50%);width:min(78%,1050px);margin:0;text-align:center;font:400 clamp(14px,1.4vw,20px)/1.85 var(--font);word-break:keep-all;overflow-wrap:anywhere;text-wrap:balance;color:#a6a5a2}
+.loading-indicator{position:absolute;right:max(36px,env(safe-area-inset-right));bottom:max(28px,env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:center;gap:8px}
+.loading-eye{display:block;width:64px;height:64px;fill:#8e908f;stroke:none}
+.loading-eye .loading-gear{transform-origin:32px 32px;animation:loading-turn 10s linear infinite}
+.loading-indicator>span{font:400 14px/1.5 var(--font);color:#8e908f;letter-spacing:.03em}
+@keyframes loading-turn{to{transform:rotate(360deg)}}
+@media(max-width:700px){
+  .loading-lore{width:calc(100% - 48px);bottom:max(125px,25dvh);font-size:15px;line-height:1.9}
+  .loading-indicator{right:max(22px,env(safe-area-inset-right));bottom:max(24px,env(safe-area-inset-bottom));gap:6px}
+  .loading-eye{width:46px;height:46px}
+  .loading-indicator>span{font-size:12px}
+}
+@media(max-height:450px){.loading-lore{bottom:30dvh;width:72%;font-size:14px}.loading-eye{width:38px;height:38px}.loading-indicator{bottom:16px;right:20px}}
+@media(prefers-reduced-motion:reduce){.loading-eye .loading-gear{animation:none}}
+.reduced-motion .loading-eye .loading-gear{animation:none}

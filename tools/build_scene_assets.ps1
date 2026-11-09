@@ -1,4 +1,4 @@
-param()
+param([string[]]$Keys = @())
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition @'
@@ -67,8 +67,13 @@ $public = Join-Path $root 'public'
 $scenes = Join-Path $public 'assets/images/scenes'
 $layout = Get-Content -LiteralPath (Join-Path $root 'config/scene_layout.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $manifest = [ordered]@{}
+if($Keys.Count) {
+    foreach($key in $Keys){if($key -notin $layout.objects.key){throw "Unknown scene object: $key"}}
+    $existing=Get-Content -LiteralPath (Join-Path $scenes 'registration.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+    foreach($entry in $existing.PSObject.Properties){$manifest[$entry.Name]=$entry.Value}
+}
 
-foreach ($entry in $layout.objects) {
+foreach ($entry in @($layout.objects | Where-Object { !$Keys.Count -or $_.key -in $Keys })) {
     $scene = $layout.scenes.($entry.scene)
     $sourcePath = Join-Path $public $scene.background.TrimStart('/')
     $source = [Drawing.Bitmap]::new($sourcePath)

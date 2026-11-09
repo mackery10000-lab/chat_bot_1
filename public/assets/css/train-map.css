@@ -1,0 +1,39 @@
+/* Keep the original train map, paper labels and wooden roller. Only the paper
+   feed and curl are animated; the scene and the map artwork never stretch. */
+.chat-page .train-map-bar{
+  --scroll-height:clamp(30px,4vw,44px);
+  --scroll-knob:clamp(14px,4.4cqw,46px);
+  position:relative;isolation:isolate;
+}
+.chat-page .map-toggle,.chat-page .map-toggle:hover{
+  z-index:4;
+  background:url('../images/ui/scroll-knob-left.svg') left center / var(--scroll-knob) 100% no-repeat,
+    url('../images/ui/scroll-knob-right.svg') right center / var(--scroll-knob) 100% no-repeat,
+    url('../images/ui/scroll-band.svg') center / calc(100% - 2*var(--scroll-knob) + 6px) 100% no-repeat;
+}
+.chat-page .map-toggle:before{
+  inset:8% calc(var(--scroll-knob) + 2px);z-index:-1;opacity:0;
+  background:linear-gradient(180deg,#fff1ce55,transparent 30%,#38200a77 75%,#fff1ce33);
+}
+.chat-page .train-map-panel{
+  /* Block flow keeps the moving sheet at one origin; its feed translation
+     supplies the motion rather than a second flex alignment offset. */
+  position:relative;display:block;overflow:hidden;transform:translateZ(0);
+}
+.chat-page .train-map-sheet{transform-origin:50% 0}
+.chat-page .train-map-canvas{aspect-ratio:2172/724}
+.chat-page .map-roll-edge{
+  position:absolute;z-index:3;left:calc(var(--scroll-knob) + 2px);right:calc(var(--scroll-knob) + 2px);
+  top:calc(var(--scroll-height) - 6px);height:clamp(8px,1.65cqw,22px);
+  border-radius:50% / 35%;opacity:0;pointer-events:none;transform-origin:50% 0;
+  background-image:linear-gradient(180deg,#34200deb,#f3d6a573 25%,#d3a56b22 45%,#3a2008bc 82%,#100b08d9),url('../images/ui/scroll-band.svg');
+  background-size:100% 100%,100% 200%;background-position:center,center top;
+  background-repeat:no-repeat,repeat-y;
+  box-shadow:0 5px 5px #09060480,inset 0 1px 1px #ffe8b0a8;
+}
+.chat-page .train-map-bar.rolling .map-toggle:before{
+  opacity:1;animation:map-axis-turn .21s linear infinite;
+}
+@keyframes map-axis-turn{0%,100%{opacity:.2;transform:scaleY(.6)}50%{opacity:.6;transform:scaleY(1)}}
+@media(prefers-reduced-motion:reduce){.chat-page .train-map-bar.rolling .map-toggle:before{opacity:0;animation:none}}
+.reduced-motion .chat-page .train-map-bar.rolling .map-toggle:before{opacity:0;animation:none}
