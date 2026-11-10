@@ -558,7 +558,7 @@ class GameEngine:
         if npc == "explorer":
             self.mark(s, "explorer_met")
             if topic in ("greeting", "other") and intent["intent"] != "accept":
-                return self.result("반가운데요? 저는 이 열차를 조사하러 온 탐험가예요. 이런 곳에서 사람을 만나니 더 흥미롭잖아요? 당신은 여기에 왜 있죠?", npc)
+                return self.result("안녕하세요. 저는 이 열차를 조사하러 온 탐험가예요. 이런 곳에서 사람을 만나니 더 흥미롭잖아요? 당신은 여기에 왜 있죠?", npc)
             if not f.get("explorer_case_known") and topic in ("identity", "case", "loop", "destination", "year"):
                 self.mark(
                     s, "explorer_case_known", "탐험가는 2016년 실종된 13-Fri를 조사해 왔다."
