@@ -1566,6 +1566,14 @@ class GameEngine:
                     return self.result("너무 어두워 주변이 잘 보이지 않는다. 먼저 앞을 밝힐 방법을 찾아보자.")
                 return self.result("이곳에는 말을 걸 사람이 없다. 주변을 둘러보며 조사할 수 있는 곳을 찾아보자.")
             choice_id = i.get("dialogue_choice_id", "")
+            if (
+                kind == "talk" and i.get("topic") == "other" and not choice_id
+                and npc == s["npc"] and npc in self.available_npcs(s)
+                and any(h.get("role") == "npc" and h.get("npc") == npc for h in s["history"])
+            ):
+                # 이미 대화 중인 상대에게 진행 주제로 분류되지 않은 말을 하면 고정 소개
+                # 대사를 반복하지 않고, 진행 권한이 없는 자유 대화로 응답한다.
+                return self.apply_intent(s, dict(i, target=npc, dialogue_mode="lore"))
             if choice_id and kind != "describe" and npc == s["npc"]:
                 option = next((o for o in self._scenario_options(s) if o["id"] == choice_id), None)
                 if option is None:

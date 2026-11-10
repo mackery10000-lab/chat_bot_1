@@ -1596,6 +1596,26 @@ class CleanerQuestionRegressionTest(GameTestCase):
         self.assertIn("ticket_old", self.items())
 
 
+class AmbiguousTalkTest(GameTestCase):
+    def test_unclassified_line_to_current_npc_uses_free_dialogue(self):
+        self.a("inspect", "notice")
+        self.a("move", "car_2")
+        first = self.t("explorer")
+        self.assertIn("탐험가예요", first["reply"])
+        self.assertNotIn("free_dialogue", first["ui"])
+        self.t("explorer", "identity")
+        before = self.items()
+        flags = dict(self.flags())
+        again = self.t("explorer")
+        self.assertEqual(again["ui"].get("free_dialogue"), "lore")
+        self.assertNotIn("탐험가예요", again["reply"])
+        self.assertEqual(self.items(), before)
+        self.assertEqual(self.flags(), flags)
+        # 자유 대화 뒤에도 진행 주제는 기존 시나리오로 처리된다.
+        self.t("explorer", "departure")
+        self.assertTrue({"flashlight", "facility_manual"} <= self.items())
+
+
 class RegisteredSceneTest(GameTestCase):
     def test_cutouts_use_the_background_canvas_and_are_served(self):
         import struct
