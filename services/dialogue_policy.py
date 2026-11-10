@@ -159,7 +159,8 @@ def free_dialogue_context(npc, state):
     result = {key: _public_note(profile.get(key, [] if key.endswith("facts") else ""))
               for key in ("voice", "known_facts", "unknown_facts", "improvisation")}
     result.update(npc=npc, recognized_year=_recognized_year(npc, state),
-                  mood=character_mood(npc, flags))
+                  mood=character_mood(npc, flags),
+                  relationship="상대는 이 열차에서 처음 만난 승객이며 첫인사는 방금 나눴다. 예전에 만난 적은 없다.")
     return result
 
 
@@ -200,6 +201,9 @@ _PRECISE_WORD_NUMBER = re.compile(
     r"(?:열|스물|서른|마흔|쉰|예순|일흔|여든|아흔|[일이삼사오육칠팔구]십)\s*(?:해|년)\s*(?:전|째|동안)|"
     r"(?:이천|천구백)[가-힣]*\s*년|(?:월요일|화요일|수요일|목요일|금요일|토요일|일요일).{0,8}(?:출발했|입사했)",
 )
+_REUNION = re.compile(
+    r"(?:다시|또)\s*(?:뵈|뵙|봬|만나(?:네|니|서|게|요|다니))|오랜만|(?:지난번|저번)에\s*(?:뵈|뵙|봬|만나)"
+)
 _DEFLECTION = re.compile(
     r"모르|몰라|모릅|모를|몰랐|알지\s*못|알\s*수\s*없|아는\s*(?:척|분야가\s*아)|잘\s*아는\s*분야가\s*아|"
     r"확인.{0,12}(?:못|어렵|없)|(?:답|말씀|설명).{0,15}(?:어렵|없)|"
@@ -230,6 +234,9 @@ def approve_free_reply(reply, npc, mode, state):
     if re.search(r"(?:^|\n)\s*(?:#{1,6}\s|[-*]\s|\d+[.)]\s|(?:assistant|system|user|narrator)\s*:)|[{}\[\]<>]|\*\*", value, re.I):
         return fallback
     if _META.search(value) or _REPLY_SCENARIO_SUBJECT.search(value) or _STATE_CLAIM.search(value):
+        return fallback
+    # Everyone meets the passenger for the first time on this train.
+    if _REUNION.search(value):
         return fallback
     # '승객을 목적지까지 안전하게 돕는 일' is ordinary career talk. Claims
     # identifying that destination, named stations, and the elder's hints remain
