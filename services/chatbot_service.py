@@ -546,6 +546,9 @@ class GameEngine:
         f = s["flags"]
         turns = s.setdefault("npc_turns", {})
         turns[npc] = turns.get(npc, 0) + 1
+        if npc == "attendant" and s["pending_dialogue"] == "why_engine" and topic in ("stop", "warning"):
+            # '무슨 이상을 봤냐'는 질문에 '열차가 안 멈춘다'고 답하면 반복 관찰을 말한 것이다.
+            topic = "loop"
         profile_reply = character_reply(npc, topic)
         if profile_reply:
             line, facts = profile_reply
@@ -607,6 +610,15 @@ class GameEngine:
                     npc,
                     ["explorer_case"],
                 )
+            if not prefix and not f.get("explorer_case_known"):
+                # 아래 대사는 실종 사건을 꺼내므로, 어떤 주제로 들어왔든 자료 신문을 함께 준다.
+                self.mark(
+                    s, "explorer_case_known", "탐험가는 2016년 실종된 13-Fri를 조사해 왔다."
+                )
+                self.give(s, "newspaper")
+                prefix = "저는 10년 전 2016년 23시 59분에 실종된 13-Fri를 오래 조사했어요. 2026년에 같은 열차가 다시 나타나서 순전히 궁금해서 탔거든요. 자료 사진이 있는 이 신문을 가져가세요. "
+            if topic == "stop":
+                prefix = "멈추고 싶은 마음은 저도 같아요. 그런데 이 열차는 그냥 세울 수 있는 상태가 아닌 것 같거든요. " + prefix
             s["pending_dialogue"] = "explorer_tools"
             return self.result(
                 (prefix + "앞쪽을 조사해 보시겠어요?")
@@ -659,9 +671,35 @@ class GameEngine:
                     npc,
                     ["elder_year", "elder_lost"],
                 )
+            if topic == "stop":
+                return self.result(
+                    "아이고, 열차를 세우는 걸 내가 우째 알겠노. 그런 건 승무원이나 기관사한테 물어보소."
+                    + ("" if f.get("ticket_returned") else " 나는 잃어버린 표부터 찾아야 하네."),
+                    npc,
+                    ["elder_lost"],
+                )
+            if topic == "lost_ticket" and not f.get("ticket_returned"):
+                if f.get("ticket_recovered"):
+                    return self.result(
+                        "아이고, 내 표를 찾았다꼬? 어서 보여주소. 그 표가 있어야 마음이 놓이겠구먼.",
+                        npc,
+                        ["elder_lost"],
+                    )
+                return self.result(
+                    "아이고, 누가 훔쳐 갔을라꼬. 창가에서 커피를 쏟고 정신이 없을 때 없어진 것 같네. 그때 청소하는 사람이 옆을 지나갔던 것 같은데… 표가 어떻게 생겼는지 물어보면 기억나는 대로 말해주겠네.",
+                    npc,
+                    ["elder_lost"],
+                )
             if f.get("ticket_returned"):
                 return self.result(
                     "아이고, 내 표를 찾아줘 고맙네. 마음이 한결 놓이는구먼. 기억나는 것이라도 물어보면 이야기해 주겠네.",
+                    npc,
+                    ["elder_lost"],
+                )
+            if turns[npc] > 1:
+                # 처음 인사는 장면 대사가 맡는다. 이후에는 같은 인사를 반복하지 않는다.
+                return self.result(
+                    "아이고, 내가 표 얘기만 해서 미안하네. 커피를 쏟고 나서 승차권이 안 보이니 마음이 영 안 놓이는구먼. 표가 어떻게 생겼는지 물어보면 기억나는 대로 말해주겠네.",
                     npc,
                     ["elder_lost"],
                 )
@@ -869,10 +907,30 @@ class GameEngine:
             )
         if npc == "driver":
             if f.get("year_proven"):
+                accepted = "10년이나 흘렀다는 겁니까"
+                if any(accepted in (h.get("record") or h.get("text", ""))
+                       for h in s["history"] if h.get("npc") == "driver"):
+                    return self.result(
+                        "현재가 2026년이라는 것은 확인했습니다. 마지막 입력 기회는 한 번입니다. 제어 장치에서 목적지와 네 자리 비밀번호를 직접 입력하십시오.",
+                        npc,
+                        ["driver_accept"],
+                    )
                 return self.result(
-                    "10년이나 흘렀다는 겁니까… 증거로 현재가 2026년임을 확인했습니다. 더는 2016년으로 판단하지 않겠습니다. 마지막 입력 기회는 한 번입니다. 제어 장치에서 목적지와 네 자리 비밀번호를 직접 입력하십시오.",
+                    accepted + "… 증거로 현재가 2026년임을 확인했습니다. 더는 2016년으로 판단하지 않겠습니다. 마지막 입력 기회는 한 번입니다. 제어 장치에서 목적지와 네 자리 비밀번호를 직접 입력하십시오.",
                     npc,
                     ["driver_accept"],
+                )
+            if topic in ("stop", "loop") and f.get("report_read"):
+                if topic == "stop":
+                    line = "멈추는 것만으로는 해결되지 않습니다. 이 반복에서 벗어나려면 다음 역인 아지산역으로 가야 합니다. 그런데 그쪽 분기기가 잠겨 있습니다."
+                else:
+                    line = "다음 역으로 가지 못하고 있기 때문입니다. 다음 역은 아지산역인데 분기기가 잠겨 있습니다. 비밀번호를 아무리 입력해도 틀렸다고 나옵니다."
+                return self.result(line, npc, ["driver_lock"])
+            if topic in ("destination", "password", "help") and f.get("driver_explained"):
+                return self.result(
+                    "말씀드린 대로 아지산역은 위험 구간이고, 가려면 잠긴 분기기를 열어야 합니다. 비밀번호는 현재 연도이고, 2016은 통하지 않았습니다. 이제 한 번 남았습니다. 지금이 다른 연도라는 증거를 보여주십시오.",
+                    npc,
+                    ["driver_lock"],
                 )
             if topic in ("destination", "password", "help") and f.get("report_read"):
                 self.mark(
