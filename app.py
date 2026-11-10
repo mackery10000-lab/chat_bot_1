@@ -160,6 +160,17 @@ def new_game():
     return response
 
 
+@app.post("/api/game/reset")
+def reset_game():
+    # Detach this browser from its old investigation. A replacement session is
+    # created only after the passenger issues a ticket with their chosen name.
+    response = jsonify({"redirect": url_for("index")})
+    response.delete_cookie(
+        COOKIE, path="/", httponly=True, samesite="Lax", secure=request.is_secure
+    )
+    return response
+
+
 @app.get("/api/item/<item_id>")
 def item_view(item_id):
     state = chatbot.store.get(game_id())

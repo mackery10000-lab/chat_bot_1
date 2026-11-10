@@ -5,7 +5,7 @@ import {fileURLToPath} from 'node:url';
 import {spawn} from 'node:child_process';
 import {createRequire} from 'node:module';
 import {createHash} from 'node:crypto';
-// Run: node tools/check_gameplay_ui.mjs [--screenshots] [--window-map-only|--presentation-only|--interface-only|--cleaner-items-only|--feedback-only|--scenes-only|--puzzles-only|--cinematics-only|--doors-only|--inventory-only]
+// Run: node tools/check_gameplay_ui.mjs [--screenshots] [--entry-only|--window-map-only|--presentation-only|--interface-only|--cleaner-items-only|--feedback-only|--scenes-only|--puzzles-only|--cinematics-only|--doors-only|--inventory-only]
 // Uses an isolated save and offline model. No remote AI or dependency installation.
 // GAMEPLAY_QA_GAME_ROOT selects an extracted portable game for the same checks.
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -19,6 +19,8 @@ const cleanerItemsOnly = process.argv.includes('--cleaner-items-only');
 const interfaceOnly = process.argv.includes('--interface-only');
 const presentationOnly = process.argv.includes('--presentation-only');
 const windowMapOnly = process.argv.includes('--window-map-only');
+const entryOnly = process.argv.includes('--entry-only');
+const entryArtOnly = process.argv.includes('--entry-art-only');
 const out = path.join(root, '.local', 'gameplay-ui-qa', String(Date.now()));
 fs.mkdirSync(out, {recursive: true});
 const chromeProfile = fs.mkdtempSync(path.join(out, 'chrome-'));
@@ -51,7 +53,7 @@ try {
  server.stderr.on('data',data=>{serverLog=(serverLog+data.toString()).slice(-8000);});
  const port=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Server startup timeout')),15000);server.stdout.on('data',data=>{const m=data.toString().match(/QA_PORT=(\d+)/);if(m){clearTimeout(timer);resolve(Number(m[1]));}});server.once('error',reject);server.once('exit',code=>reject(new Error('Server exited '+code)));});
  const base='http://127.0.0.1:'+port;
- browser=spawn(chromeExecutable(),['--headless=new','--no-first-run','--no-default-browser-check','--disable-background-networking','--disable-component-update','--disable-extensions','--disable-breakpad','--autoplay-policy=document-user-activation-required','--remote-debugging-port=0','--user-data-dir='+chromeProfile,'about:blank'],{windowsHide:true,stdio:['ignore','ignore','pipe']});
+ browser=spawn(chromeExecutable(),['--headless=new',...(process.argv.includes('--software-renderer')?['--disable-gpu']:[]),'--no-first-run','--no-default-browser-check','--disable-background-networking','--disable-component-update','--disable-extensions','--disable-breakpad','--autoplay-policy=document-user-activation-required','--remote-debugging-port=0','--user-data-dir='+chromeProfile,'about:blank'],{windowsHide:true,stdio:['ignore','ignore','pipe']});
  const ws=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Chrome startup timeout')),15000);browser.stderr.on('data',data=>{const m=data.toString().match(/DevTools listening on (ws:\/\/\S+)/);if(m){clearTimeout(timer);resolve(m[1]);}});browser.once('error',reject);});
  const Socket=websocketClass();socket=new Socket(ws);await new Promise((resolve,reject)=>{socket.addEventListener('open',resolve,{once:true});socket.addEventListener('error',reject,{once:true});});
  let id=0;const pending=new Map();
@@ -204,6 +206,12 @@ try {
   await evaluate(`document.querySelector('#passengerName').value=${JSON.stringify(name)};document.querySelector('#passengerName').dispatchEvent(new Event('input'))`);
   await click('#issueBtn');
  };
+ const freshTitle=async label=>{
+  await wait(`location.pathname==='/'&&!!document.querySelector('.boarding-pass')&&document.readyState==='complete'`,label+' reaches the first screen');
+  await check(label+' returns to the title without a film or saved name',`!document.querySelector('#cinematic')&&localStorage.getItem('noTerminus.playerName')===null&&sessionStorage.getItem('train.opening.seen')===null`);
+  await click('.boarding-pass');await wait(`location.pathname==='/detail'&&!!document.querySelector('#passengerName')&&document.readyState==='complete'`);
+  await check(label+' offers blank name entry before issuing again',`document.querySelector('#passengerName').value===''&&document.querySelector('#issueBtn').disabled`);
+ };
  const openingRecoveryChecks=async()=>{
   await evaluate(`sessionStorage.removeItem('train.opening.seen')`);
   const {identifier}=await call('Page.addScriptToEvaluateOnNewDocument',{source:`(()=>{
@@ -273,6 +281,131 @@ try {
   return metrics.click;
  };
 
+ if(entryArtOnly){
+  await viewport(390,844);await navigate('/');
+  await evaluate(`localStorage.setItem('noTerminus.settings',JSON.stringify({bgm:35,sfx:60,speed:'fast',effects:true}))`);await navigate('/');
+  await wait(`[...document.querySelectorAll('.lamp__art')].every(i=>i.complete&&i.naturalWidth>0)`);
+  await evaluate(`new Promise(resolve=>{const start=performance.now();const frame=now=>now-start>1000?resolve():requestAnimationFrame(frame);requestAnimationFrame(frame);})`);
+  const lampMetrics=()=>evaluate(`[...document.querySelectorAll('.lamp')].map(lamp=>{const image=lamp.querySelector('.lamp__art'),rect=el=>{const r=el.getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height};},css=el=>{const s=getComputedStyle(el);return Object.fromEntries(['display','visibility','opacity','transform','filter','zIndex','position','isolation','clipPath','mixBlendMode'].map(k=>[k,s[k]]));};return {className:lamp.className,box:rect(lamp),css:css(lamp),image:{src:image.currentSrc,complete:image.complete,natural:[image.naturalWidth,image.naturalHeight],box:rect(image),css:css(image)},emission:css(lamp.querySelector('.lamp__emission'))};})`);
+  const metrics={fresh:await lampMetrics()};await snapshot('entry-art-fresh-390');
+  const surface=await call('Page.captureScreenshot',{format:'png',captureBeyondViewport:false,fromSurface:false});fs.writeFileSync(path.join(out,'entry-art-fresh-from-view-390.png'),Buffer.from(surface.data,'base64'));
+  await evaluate(`new Promise(resolve=>{const start=performance.now();const frame=now=>now-start>5000?resolve():requestAnimationFrame(frame);requestAnimationFrame(frame);})`);
+  metrics.afterCycle=await lampMetrics();await snapshot('entry-art-cycle-390');
+  await evaluate(`document.querySelectorAll('.lamp__art').forEach(el=>el.style.transform='translateZ(0)');new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))`);
+  metrics.translated=await lampMetrics();await snapshot('entry-art-translatez-390');
+  await evaluate(`document.querySelectorAll('.lamp__art').forEach(el=>{el.style.transform='';el.style.opacity='.9999';});new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))`);
+  metrics.repainted=await lampMetrics();await snapshot('entry-art-repaint-390');
+  fs.writeFileSync(path.join(out,'entry-lamp-metrics.json'),JSON.stringify(metrics,null,2));
+  await check('fresh mobile title retains all three loaded fixtures',metrics.fresh.length===3&&metrics.fresh.every(lamp=>lamp.image.complete&&lamp.image.natural[0]>0&&lamp.image.box.w>0&&lamp.image.css.visibility==='visible'&&lamp.image.css.opacity==='1'));
+ }
+ if(entryOnly){
+  const sizes=[[1440,900],[390,844],[320,568],[844,390]];
+  const settled=()=>evaluate('document.fonts.ready.then(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))))');
+  const landingReady=async()=>{
+   await navigate('/');await wait(`[...document.querySelectorAll('.main img,.ceiling img,.top-actions img')].every(i=>i.complete&&i.naturalWidth>0)`,'entry artwork loads');await settled();
+  };
+  const talkToExplorer=async()=>{
+   // Scrolling the full-canvas hit layer can trigger a final scene fit. Let that
+   // paint before choosing a real pointer coordinate on its silhouette.
+   await evaluate(`document.querySelector('[data-npc="explorer"]').scrollIntoView({block:'center',inline:'nearest'})`);await settled();
+   await click('[data-npc="explorer"]');await wait(`!document.querySelector('#dialogue-box').hidden&&document.querySelector('#speaker-name').textContent==='탐험가'`,'explorer responds to the actual pointer');await ready();
+  };
+  await navigate('/');
+  await evaluate(`localStorage.removeItem('noTerminus.playerName');localStorage.setItem('noTerminus.settings',JSON.stringify({bgm:35,sfx:60,speed:'fast',effects:true}))`);
+  await call('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'no-preference'}]});
+  const motionSampler=await call('Page.addScriptToEvaluateOnNewDocument',{source:`(()=>{
+   if(location.pathname!=='/')return;
+   document.addEventListener('DOMContentLoaded',()=>{
+    window.__qaEntryMotion=[];const start=performance.now();let last=-100;
+    const sample=now=>{
+     const elapsed=now-start,sign=document.querySelector('.sign'),frame=document.querySelector('.sign__frame');
+     if(sign&&frame&&elapsed-last>=35){last=elapsed;const matrix=new DOMMatrix(getComputedStyle(frame).transform);window.__qaEntryMotion.push({at:elapsed,phase:sign.dataset.phase,tension:sign.dataset.tension,angle:Math.atan2(matrix.b,matrix.a)*180/Math.PI,left:document.querySelector('.sign__cord--left')?.getAttribute('d'),right:document.querySelector('.sign__cord--right')?.getAttribute('d')});}
+     if(elapsed<4700)requestAnimationFrame(sample);else window.__qaEntryMotionDone=true;
+    };requestAnimationFrame(sample);
+   },{once:true});
+  })();`});
+  for(const [width,height] of sizes){
+   await viewport(width,height);await landingReady();
+   if(width===1440){
+    await wait(`window.__qaEntryMotionDone`,'initial sign settles naturally',7000);
+    await call('Page.removeScriptToEvaluateOnNewDocument',{identifier:motionSampler.identifier});
+    const motion=await evaluate('window.__qaEntryMotion');
+    fs.writeFileSync(path.join(out,'entry-sign-motion.json'),JSON.stringify(motion,null,2));
+    const level=motion.filter(s=>s.phase==='level'),sag=motion.filter(s=>s.phase==='sagging'),end=motion.at(-1);
+    await check('arrival starts with a horizontal sign and both cords attached',level.length>3&&level.every(s=>Math.abs(s.angle)<.02)&&!!level[0].left&&!!level[0].right);
+    await check('both suspension cords paint even when a path is vertical',`document.querySelector('#cord-brass').getAttribute('gradientUnits')==='userSpaceOnUse'&&[...document.querySelectorAll('.sign__cord')].every(el=>el.getTotalLength()>25&&getComputedStyle(el).stroke!=='none')`);
+    await check('left cord begins to sag after half a second',sag.length>3&&sag[0].at>=400&&sag[0].at<=1100&&new Set(sag.map(s=>s.left)).size>5);
+    const strain=sag.filter(s=>s.tension==='straining'),yielding=sag.filter(s=>s.tension==='yielding');
+    await check('worn cord trembles before the sign yields',strain.length>8&&Math.max(...strain.map(s=>s.angle))-Math.min(...strain.map(s=>s.angle))>.04&&strain.every(s=>Math.abs(s.angle)<.24)&&yielding.length>8);
+    await check('short slips settle without a large pendulum bounce',end.phase==='settled'&&Math.abs(end.angle+2.2)<.02&&Math.min(...sag.map(s=>s.angle))>-2.4&&Math.min(...yielding.map(s=>s.angle))<-2.24&&yielding.some(s=>s.angle>-1));
+    await check('frayed fibers remain joined to the left suspension',`[...document.querySelectorAll('.sign__fray')].length===3&&[...document.querySelectorAll('.sign__fray')].every(p=>p.getTotalLength()>2&&getComputedStyle(p).pointerEvents==='none')`);
+    await check('all three fixture images match their physical light layers',`[...document.querySelectorAll('.ceiling .lamp')].length===3&&[...document.querySelectorAll('.ceiling .lamp')].every(el=>el.querySelector('.lamp__art')?.complete&&el.querySelector('.lamp__emission'))`);
+    await check('first lamp stays off and third lamp stays lit',`getComputedStyle(document.querySelector('.lamp--off .lamp__emission')).opacity==='0'&&Number(getComputedStyle(document.querySelector('.lamp--on .lamp__emission')).opacity)>.95`);
+    await check('middle lamp flickers every five seconds with actual light intensity changes',`(async()=>{const el=document.querySelector('.lamp--flicker .lamp__emission'),animations=el.getAnimations();if(!animations.length||!animations.some(a=>a.effect.getTiming().duration===5000))return false;const light=[],start=performance.now();await new Promise(resolve=>{const sample=now=>{light.push(Number(getComputedStyle(el).opacity));if(now-start>=5200)resolve();else requestAnimationFrame(sample);};requestAnimationFrame(sample);});return Math.max(...light)>.9&&Math.min(...light)<.2;})()`);
+   }
+   await check('title narration uses the requested premise '+width,`document.querySelector('#narration-full').textContent==='평범한 출장길이었다. 적어도, 그 열차에 오르기 전까지는...'`);
+   await check('title ticket consistently announces carriage 01 and seat 08C '+width,`(()=>{const a=document.querySelector('.boarding-pass'),text=(a.getAttribute('aria-label')||'')+' '+a.querySelector('img').alt;return text.includes('01호차')&&text.includes('08C');})()`);
+   await check('title keeps its sign, narration and ticket order '+width,`(()=>{const a=document.querySelector('.sign').getBoundingClientRect(),b=document.querySelector('.narration').getBoundingClientRect(),image=document.querySelector('.boarding-pass img'),c=image.getBoundingClientRect();return a.width>0&&b.width>0&&c.width>0&&a.bottom<=b.top+2&&b.bottom<=c.top+2&&Math.abs(image.offsetWidth/image.offsetHeight-1200/417)<.025&&document.documentElement.scrollWidth<=innerWidth+1;})()`);
+   await check('title image controls are reachable without covering each other '+width,`(()=>{const a=[...document.querySelectorAll('.top-actions button')].map(el=>el.getBoundingClientRect());return a.length===2&&a.every(r=>r.width>=40&&r.height>=40&&r.left>=0&&r.right<=innerWidth+1&&r.top>=0)&&a[0].right<=a[1].left+1;})()`);
+   await snapshot('entry-title-'+width+'x'+height);
+   await click('.boarding-pass');await wait(`location.pathname==='/detail'&&!!document.querySelector('#passengerName')&&document.readyState==='complete'`);await wait(`[...document.querySelector('.pass').getAnimations()].every(a=>a.playState!=='running')`,'ticket feed completes');await settled();
+   await check('boarding helper and ticket identify carriage 01 seat 08C '+width,`document.querySelector('#message').textContent==='저희 열차에 탑승해 주셔서 감사합니다.'&&document.querySelector('.pass__foot').textContent.includes('객차 01호차')&&document.querySelector('.pass__foot').textContent.includes('좌석 08C')`);
+   await check('boarding keeps the existing ticket sections and compact viewport width '+width,`(()=>{const slot=document.querySelector('.booth__slot').getBoundingClientRect(),pass=document.querySelector('.pass').getBoundingClientRect(),name=document.querySelector('#passengerName').getBoundingClientRect(),random=document.querySelector('#randomBtn').getBoundingClientRect();return slot.width>0&&pass.width>0&&slot.bottom<=pass.top+5&&slot.width>=pass.width&&name.width>0&&random.width>=32&&name.right<=random.left+1&&pass.left>=0&&pass.right<=innerWidth+1&&document.querySelectorAll('.pass__cell').length===6&&document.documentElement.scrollWidth<=innerWidth+1;})()`);
+   await check('blank boarding name remains blocked '+width,`document.querySelector('#passengerName').value===''&&document.querySelector('#issueBtn').disabled`);
+   await evaluate(`document.querySelector('#passengerName').value='123';document.querySelector('#passengerName').dispatchEvent(new Event('input'))`);
+   await check('invalid boarding name still gives a validation warning '+width,`document.querySelector('#issueBtn').disabled&&document.querySelector('#message').textContent.includes('한글이나 영문')`);
+   await evaluate(`document.querySelector('#passengerName').value='윤슬';document.querySelector('#passengerName').dispatchEvent(new Event('input'))`);
+   await check('valid name retains the welcome helper and issue control '+width,`!document.querySelector('#issueBtn').disabled&&document.querySelector('#message').textContent==='저희 열차에 탑승해 주셔서 감사합니다.'`);
+   await snapshot('entry-boarding-'+width+'x'+height);
+   await seed('feedback');
+   const before=await evaluate(`fetch('/api/game').then(r=>r.json()).then(d=>d.game.revision)`);
+   await check('notice text is obscured while keeping the original scene geometry '+width,`(()=>{const el=document.querySelector('#scene-notice-obscurer'),image=document.querySelector('#scene-image');return el?.complete&&el.naturalWidth>0&&el.currentSrc===image.currentSrc&&parseFloat(getComputedStyle(el).filter.match(/blur\\(([^)]+)/)?.[1])>=2&&getComputedStyle(el).clipPath.startsWith('polygon(')&&!document.querySelector('#overlay').open;})()`);
+   await click('[data-hotspot="notice"]',true);await settled();
+   await check('hover still obscures the text and never records an inspection '+width,`fetch('/api/game').then(r=>r.json()).then(d=>d.game.revision===${before}&&!document.querySelector('#overlay').open&&[...document.querySelectorAll('.notice-hotspot .notice-obscurer')].some(el=>parseFloat(getComputedStyle(el).filter.match(/blur\\(([^)]+)/)?.[1])>=2))`);
+   await snapshot('entry-notice-hover-'+width);
+   await click('[data-hotspot="notice"]');await ready();await images();
+   await check('click lifts a readable notice directly above the darkened room '+width,`(()=>{const d=document.querySelector('#overlay'),i=d.querySelector('.notice-art-view img'),css=getComputedStyle(d),backdrop=getComputedStyle(d,'::backdrop').backgroundColor;return d.open&&d.dataset.view==='notice'&&d.classList.contains('notice-dialog')&&!d.classList.contains('paper-dialog')&&i?.complete&&i.naturalWidth>0&&i.currentSrc.includes('/car1/notice.png')&&getComputedStyle(i).filter==='none'&&css.backgroundImage==='none'&&/rgba\\(3, 3, 2, 0\\.[67]/.test(backdrop);})()`);
+   await check('notice and close control fit the current display '+width,`(()=>{const d=document.querySelector('#overlay'),r=d.getBoundingClientRect(),c=document.querySelector('#close-overlay').getBoundingClientRect();return r.left>=0&&r.top>=0&&r.right<=innerWidth+1&&r.bottom<=innerHeight+1&&c.width>=44&&c.height>=44&&c.right<=innerWidth+1&&c.top>=0;})()`);
+   await check('only clicking the notice unlocks carriage two '+width,`fetch('/api/game').then(r=>r.json()).then(d=>d.game.revision>${before}&&d.game.map.find(p=>p.id==='car_2').open)`);
+   await snapshot('entry-notice-open-'+width);await click('#close-overlay');
+   await check('notice close restores scene controls and normal scrolling '+width,`!document.querySelector('#overlay').open&&getComputedStyle(document.documentElement).overflow!=='hidden'&&!!document.querySelector('[data-hotspot="notice"]')`);
+  }
+  await viewport(1440,900);await landingReady();
+  await click('[data-bgm-toggle]');await check('redrawn title sound button still mutes',`TrainAudio.isMuted()&&TrainAudio.element.paused`);
+  await click('[data-bgm-toggle]');await wait(`!TrainAudio.isMuted()&&!TrainAudio.element.paused`,'title sound restores actual music');
+  await click('#settingsBtn');await check('redrawn title settings control opens the existing dialog',`document.querySelector('#settingsDialog').matches(':modal')`);
+  await click('#setFx');
+  await check('visual effects preference remains functional',`document.documentElement.classList.contains('no-fx')&&!JSON.parse(localStorage.getItem('noTerminus.settings')).effects`);
+  await check('disabling visual effects settles the sign and stops lighting animation',`document.querySelector('.sign').dataset.phase==='settled'&&document.querySelectorAll('.lamp__emission').length===3&&[...document.querySelectorAll('.lamp__emission')].every(el=>el.getAnimations().every(a=>a.playState!=='running'))`);
+  await call('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});await call('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
+  await check('title settings still closes with Escape',`!document.querySelector('#settingsDialog').open`);
+  await navigate('/detail');
+  await check('boarding respects the saved visual effects preference',`document.documentElement.classList.contains('no-fx')&&document.querySelector('.lamp__emission').getAnimations().every(a=>a.playState!=='running')&&document.querySelector('.pass').getAnimations().every(a=>a.playState!=='running')`);
+  await evaluate(`localStorage.setItem('noTerminus.settings',JSON.stringify({...JSON.parse(localStorage.getItem('noTerminus.settings')),effects:true}))`);
+  await call('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});await landingReady();
+  await check('system reduced motion also keeps the sign and lights still',`document.querySelector('.sign').dataset.phase==='settled'&&[...document.querySelectorAll('.lamp__emission')].every(el=>el.getAnimations().every(a=>a.playState!=='running'))&&document.querySelector('#line2').textContent==='적어도, 그 열차에 오르기 전까지는...'`);
+  await call('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'no-preference'}]});
+  await seed('scene_car_2');await talkToExplorer();
+  await check('returning explorer opens with the requested greeting',`/^“?안녕하세요[.!]/.test(document.querySelector('#dialogue-text').textContent.trim())`);
+  await seed('feedback');await click('[data-hotspot="notice"]');await ready();await click('#close-overlay');await wait(`!document.querySelector('.train-map-bar').classList.contains('rolling')`);
+  await click('[data-hotspot="door_to_car_2"]');await ready();await talkToExplorer();
+  await check('first explorer meeting also opens with the requested greeting',`/^“?안녕하세요[.!]/.test(document.querySelector('#dialogue-text').textContent.trim())`);
+  await seed('feedback');
+  await evaluate(`localStorage.setItem('noTerminus.playerName','이전승객');sessionStorage.setItem('train.opening.seen','1');localStorage.setItem('train_map_closed','true')`);
+  const preferences=await evaluate(`localStorage.getItem('noTerminus.settings')`);
+  const revision=await evaluate(`fetch('/api/game').then(r=>r.json()).then(d=>d.game.revision)`);
+  await click('#menu-btn');await click('.settings-list>button:nth-last-child(2)');await click('.modal-actions button');
+  await check('cancelling new investigation preserves the active save',`fetch('/api/game').then(r=>r.json()).then(d=>d.game.revision===${revision}&&!document.querySelector('#overlay').open)`);
+  await click('#menu-btn');await click('.settings-list>button:nth-last-child(2)');await click('.modal-actions .primary');
+  await freshTitle('settings new investigation');
+  await check('new investigation preserves audio, effects and map preferences',`localStorage.getItem('noTerminus.settings')===${JSON.stringify(preferences)}&&localStorage.getItem('train_map_closed')==='true'`);
+  await evaluate(`document.querySelector('#passengerName').value='새승객';document.querySelector('#passengerName').dispatchEvent(new Event('input'))`);await click('#issueBtn');
+  await cinematicReady('opening','opening.mp4');
+  await check('fresh name issuance creates a pristine first carriage save',`fetch('/api/game').then(r=>r.json()).then(d=>d.game.username==='새승객'&&d.game.location.id==='car_1'&&d.game.revision===0&&d.game.attempts===null&&!d.game.clock_running)`);
+  await click('#cinematic-skip');await ready();
+  await seed('ending_good');await cinematicReady('good','good-ending.mp4');await finishVideo();await wait(`document.querySelector('#ending-restart')&&document.querySelector('#overlay').open`);
+  await click('#ending-restart');await freshTitle('completed ending restart');
+ }
  if(cleanerItemsOnly){
   for(const [width,height] of [[1440,1000],[390,844],[320,568]]){
    await viewport(width,height);await seed('cleaner_items');
@@ -350,6 +483,7 @@ try {
     await seed('scene_'+location);
     await check('native scene ratio '+location+' '+width,`(()=>{const w=document.querySelector('#scene-world').getBoundingClientRect(),i=document.querySelector('#scene-image');return Math.abs(w.width/w.height-i.naturalWidth/i.naturalHeight)<.003&&document.documentElement.scrollWidth<=innerWidth;})()`);
     await check('all visible actor layers load '+location+' '+width,`[...document.querySelectorAll('.registered-character .registered-art')].every(i=>i.complete&&i.naturalWidth===document.querySelector('#scene-image').naturalWidth&&getComputedStyle(i.parentElement).opacity==='1')`);
+    await check('unused plaques disappear only in cars two and three '+location+' '+width,`(()=>{const repair=document.querySelector('#scene-wall-repair'),expected=${JSON.stringify(['car_2','car_3'].includes(location))};return expected?!!repair&&getComputedStyle(repair).pointerEvents==='none'&&getComputedStyle(repair).backgroundImage.includes('passenger-wall-repaired.png')&&!document.querySelector('[data-hotspot="notice"],#scene-notice-obscurer'):!repair;})()`);
     if(location==='car_3')await check('flashlight shades actors as well as the scene '+width,`Number(getComputedStyle(document.querySelector('#darkness')).zIndex)>Number(getComputedStyle(document.querySelector('#character-layer')).zIndex)`);
     if(location==='crew'){
      await check('crew room has only the operating report interaction '+width,`!document.querySelector('[data-hotspot="desk"]')&&document.querySelectorAll('[data-hotspot="report"]').length===1`);
@@ -490,8 +624,7 @@ try {
    await panelFits('ending certificate fits '+kind+' '+width);
    await check('completed ending keeps composer hidden '+kind,`document.querySelector('.conversation-console').hidden&&document.querySelector('#user-message').disabled&&!!document.querySelector('#ending-restart')`);
    await snapshot('interface-ending-'+kind+'-'+width);
-   await click('#ending-restart');await cinematicReady('opening','opening.mp4');await click('#cinematic-skip');await ready();
-   await check('ending restart returns to exploration '+kind,`document.querySelector('.conversation-console').hidden&&!document.querySelector('#overlay').open`);
+   await click('#ending-restart');await freshTitle('ending restart '+kind);
   }
  }
  if(presentationOnly){
@@ -642,7 +775,7 @@ try {
   }
   await retainWindow();await escape();await windowReleased();
  }
- if(!windowMapOnly&&!presentationOnly&&!interfaceOnly&&!scenesOnly&&!feedbackOnly&&!cleanerItemsOnly){
+ if(!entryArtOnly&&!entryOnly&&!windowMapOnly&&!presentationOnly&&!interfaceOnly&&!scenesOnly&&!feedbackOnly&&!cleanerItemsOnly){
  if(inventoryOnly)await inventoryChecks();
  if(cinematicsOnly&&!inventoryOnly){
   await viewport(390,844);await issueName('윤슬');await openingChecks();
@@ -811,8 +944,10 @@ try {
   await check(ending+' completion preserves the saved outcome',`fetch('/api/game').then(r=>r.json()).then(d=>d.game.status==='${ending}'&&d.game.attempts===0)`);
  }
  await click('#ending-restart');
+ await freshTitle('ending restart');
+ await issueName('새시작');
  await cinematicReady('opening','opening.mp4');
- await check('ending restart starts a new opening before gameplay',`fetch('/api/game').then(r=>r.json()).then(d=>d.game.revision===0&&d.game.location.id==='car_1'&&d.game.status==='playing'&&d.game.attempts===null&&!d.game.clock_running)`);
+ await check('issuing after ending restart starts a fresh opening before gameplay',`fetch('/api/game').then(r=>r.json()).then(d=>d.game.revision===0&&d.game.username==='새시작'&&d.game.location.id==='car_1'&&d.game.status==='playing'&&d.game.attempts===null&&!d.game.clock_running)`);
  await finishVideo();await ready();
  await check('a completed new opening begins a fresh car 1 game',`fetch('/api/game').then(r=>r.json()).then(d=>d.game.location.id==='car_1'&&d.game.status==='playing'&&d.game.attempts===null&&!d.game.clock_running&&!document.querySelector('#cinematic').open)`);
  await openingRecoveryChecks();

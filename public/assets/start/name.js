@@ -27,15 +27,11 @@
     booth.classList.toggle('is-ready', ok);
 
     if (!name) {
-      message.textContent = '성함을 적으면 승차권이 발권됩니다.';
+      message.textContent = '저희 열차에 탑승해 주셔서 감사합니다.';
     } else if (!ok) {
       message.textContent = '이름은 한글이나 영문으로만 적어 주십시오.';
     } else {
-      message.innerHTML = '';
-      const strong = document.createElement('span');
-      strong.className = 'register-msg__name';
-      strong.textContent = name; // 사용자가 입력한 값은 textContent로 (HTML 주입 방지)
-      message.append(strong, ' 님 앞으로 승차권을 발권합니다.', document.createElement('br'), '이 열차는 종착지가 없습니다.');
+      message.textContent = '저희 열차에 탑승해 주셔서 감사합니다.';
     }
   }
 

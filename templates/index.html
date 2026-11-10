@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>운행 종료 불가 · NO LAST STOP</title>
   <link rel="stylesheet" href="{{ asset_url('assets/start/style.css') }}">
+  <link rel="stylesheet" href="{{ asset_url('assets/start/entry-art.css') }}">
 </head>
 <body>
   <div class="screen">
@@ -12,39 +13,42 @@
     <!-- 천장 등 3개: 꺼짐 / 깜박임 / 켜짐 (옛 객차의 둥근 유리 천장등) -->
     <div class="ceiling" aria-hidden="true">
       <div class="lamp lamp--off">
-        <div class="lamp__mount"></div>
-        <div class="lamp__shade"></div>
-        <div class="lamp__finial"></div>
+        <img class="lamp__art" src="{{ asset_url('assets/start/images/entry-lamp.png') }}" alt="" width="1024" height="768">
+        <span class="lamp__emission"><span class="lamp__glass-light"></span><span class="lamp__bloom"></span><span class="lamp__spill"></span></span>
       </div>
       <div class="lamp lamp--flicker">
-        <div class="lamp__mount"></div>
-        <div class="lamp__shade fx"></div>
-        <div class="lamp__finial"></div>
+        <img class="lamp__art" src="{{ asset_url('assets/start/images/entry-lamp.png') }}" alt="" width="1024" height="768">
+        <span class="lamp__emission fx"><span class="lamp__glass-light"></span><span class="lamp__bloom"></span><span class="lamp__spill"></span></span>
       </div>
       <div class="lamp lamp--on">
-        <div class="lamp__mount"></div>
-        <div class="lamp__shade"></div>
-        <div class="lamp__finial"></div>
+        <img class="lamp__art" src="{{ asset_url('assets/start/images/entry-lamp.png') }}" alt="" width="1024" height="768">
+        <span class="lamp__emission"><span class="lamp__glass-light"></span><span class="lamp__bloom"></span><span class="lamp__spill"></span></span>
       </div>
     </div>
 
     <!-- 우측 상단 버튼 -->
     <div class="top-actions">
       <button class="icon-btn" type="button" aria-label="배경음악 끄기" aria-pressed="false" data-bgm-toggle>
-        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/></svg>
+        <img src="{{ asset_url('assets/start/images/entry-sound.png') }}" width="44" height="44" alt="" draggable="false">
       </button>
       <button class="icon-btn" type="button" aria-label="환경 설정" aria-haspopup="dialog" id="settingsBtn">
-        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <img src="{{ asset_url('assets/start/images/entry-settings.png') }}" width="44" height="44" alt="" draggable="false">
       </button>
     </div>
 
     <main class="main">
 
       <!-- 철도역 간판 = 게임 제목 -->
-      <div class="sign fx">
+      <div class="sign" data-phase="level" data-angle="0">
         <div class="sign__chains" aria-hidden="true">
-          <span class="sign__chain"></span>
-          <span class="sign__chain"></span>
+          <svg class="sign__rigging" viewBox="0 0 760 100" preserveAspectRatio="none">
+            <defs><linearGradient id="cord-brass" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="70"><stop stop-color="#715232"/><stop offset=".45" stop-color="#b99a62"/><stop offset=".7" stop-color="#947346"/><stop offset="1" stop-color="#594027"/></linearGradient></defs>
+            <path class="sign__cord sign__cord--left" d="M121.6 0 Q121.6 15 121.6 35"/>
+            <path class="sign__cord sign__cord--right" d="M638.4 0 Q638.4 15 638.4 35"/>
+            <path class="sign__fray" d=""/>
+            <path class="sign__fray" d=""/>
+            <path class="sign__fray" d=""/>
+          </svg>
         </div>
         <div class="sign__frame concave-all">
           <div class="sign__inner concave-all">
@@ -56,11 +60,9 @@
               <span class="sign__line sign__line--fill2 concave-top" aria-hidden="true"></span>
               <!-- 낡은 느낌: 벗겨진 칠·긁힌 자국 -->
               <span class="sign__wear sign__wear--chips" aria-hidden="true"></span>
-              <span class="sign__platform">PLATFORM 0 · CIRCLE LINE</span>
               <h1 class="sign__title">
                 <img class="sign__title-logo" src="{{ asset_url('assets/start/images/title-logo.webp') }}" width="1264" height="599" alt="운행 종료 불가" draggable="false">
               </h1>
-              <p class="sign__subtitle" lang="en">NO LAST STOP</p>
             </div>
             <div class="sign__strip">
               <span class="neon fx">전역 출발</span>
@@ -85,8 +87,8 @@
       <!-- 승차권 버튼 -->
       <div class="cta">
         <!-- 승차권 이미지가 곧 탑승 버튼 -->
-        <a class="boarding-pass" href="{{ url_for('detail') }}" aria-label="탑승하기">
-          <img src="{{ asset_url('assets/start/images/ticket.webp') }}" width="1200" height="417" alt="13-Fri 열차 승차권. 서울역 출발, 도착역은 얼룩으로 지워짐">
+        <a class="boarding-pass" href="{{ url_for('detail') }}" aria-label="탑승하기 · 01호차 · 좌석 08C">
+          <img src="{{ asset_url('assets/start/images/entry-boarding-ticket.png') }}" width="1200" height="417" alt="13-Fri 열차 승차권. 01호차, 좌석 08C. 서울역 출발, 도착역은 얼룩으로 지워짐">
           <span class="boarding-pass__hint" aria-hidden="true">탑승하기 ›</span>
         </a>
       </div>
@@ -146,6 +148,7 @@
 
   <script src="{{ asset_url('assets/js/audio.js') }}"></script>
   <script src="{{ asset_url('assets/start/settings.js') }}"></script>
+  <script src="{{ asset_url('assets/start/entry-motion.js') }}"></script>
   <script src="{{ asset_url('assets/start/script.js') }}"></script>
 </body>
 </html>

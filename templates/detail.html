@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>운행 종료 불가 · 승차권 발권</title>
   <link rel="stylesheet" href="{{ asset_url('assets/start/style.css') }}">
+  <link rel="stylesheet" href="{{ asset_url('assets/start/entry-art.css') }}">
 </head>
 <body>
   <div class="screen">
@@ -12,9 +13,8 @@
     <!-- 천장 등 하나 (깜박임) -->
     <div class="ceiling" aria-hidden="true">
       <div class="lamp lamp--flicker">
-        <div class="lamp__mount"></div>
-        <div class="lamp__shade fx"></div>
-        <div class="lamp__finial"></div>
+        <img class="lamp__art" src="{{ asset_url('assets/start/images/entry-lamp.png') }}" width="1024" height="768" alt="">
+        <span class="lamp__emission fx"><span class="lamp__glass-light"></span><span class="lamp__bloom"></span><span class="lamp__spill"></span></span>
       </div>
     </div>
 
@@ -75,7 +75,7 @@
             </div>
 
             <div class="pass__foot">
-              <span>객차 03호차</span><span>좌석 13A</span><span>편도 · 환불 불가</span>
+              <span>객차 01호차</span><span>좌석 08C</span><span>편도 · 환불 불가</span>
             </div>
 
             <!-- 발권 도장 (발권하면 찍힘) -->
@@ -85,7 +85,7 @@
       </section>
 
       <!-- 이름에 반응하는 문구 -->
-      <p class="register-msg" id="message" aria-live="polite">성함을 적으면 승차권이 발권됩니다.</p>
+      <p class="register-msg" id="message" aria-live="polite">저희 열차에 탑승해 주셔서 감사합니다.</p>
 
       <div class="register-actions">
         <a class="back-link" href="{{ url_for('index') }}">
@@ -102,6 +102,7 @@
   </div>
 
   <script src="{{ asset_url('assets/js/audio.js') }}"></script>
+  <script src="{{ asset_url('assets/start/entry-motion.js') }}"></script>
   <script src="{{ asset_url('assets/start/name.js') }}"></script>
 </body>
 </html>

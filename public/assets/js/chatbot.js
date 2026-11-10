@@ -34,6 +34,8 @@ const supportedActions = new Set(['look','move','select_npc','inspect','read_ite
 let acquisitionQueue=[], acquisitionActive=false;
 let acquisitionTimer=null;
 const preparedImages=new Map();
+const wallRepairRooms=new Set(['car_2','car_3']);
+const wallRepairImage='/assets/images/scenes/passenger-wall-repaired.png';
 function prepareImage(src) {
   if(preparedImages.has(src)) return preparedImages.get(src);
   const promise=new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>{if(img.decode)img.decode().then(()=>resolve(img)).catch(()=>resolve(img));else resolve(img);};img.onerror=()=>reject(new Error('장면 이미지를 불러오지 못했습니다. 같은 요청으로 다시 시도해 주세요.'));img.src=src;});
@@ -44,7 +46,8 @@ async function prepareScene(data,force=false) {
   const changed=force||!state||data.game.location.id!==state.location.id;
   if(changed) showSceneLoading(true);
   const surfaces=!state?['dialogue-paper','chat-input','choice-paper','hint-paper','train-window-frame'].map(name=>prepareImage('/assets/images/ui/'+name+'.png')):[];
-  await Promise.all([...surfaces,prepareImage(data.scene.background),...data.scene.people.filter(p=>p.active||!data.game.npc).map(p=>prepareImage(!p.active&&p.registration?p.registration.image:p.image)),...(data.scene.hotspots||[]).filter(p=>p.image).map(p=>prepareImage(p.image)),...(data.ui?.document?.artwork?[prepareImage(data.ui.document.artwork)]:[])]);
+  const roomArt=wallRepairRooms.has(data.game.location.id)?[prepareImage(wallRepairImage)]:[];
+  await Promise.all([...surfaces,...roomArt,prepareImage(data.scene.background),...data.scene.people.filter(p=>p.active||!data.game.npc).map(p=>prepareImage(!p.active&&p.registration?p.registration.image:p.image)),...(data.scene.hotspots||[]).filter(p=>p.image).map(p=>prepareImage(p.image)),...(data.ui?.document?.artwork?[prepareImage(data.ui.document.artwork)]:[])]);
 
 }
 function acquisition(events) {
@@ -54,6 +57,7 @@ function acquisition(events) {
 function showAcquisition() {
   if(acquisitionActive||!acquisitionQueue.length)return;
   acquisitionActive=true;const item=acquisitionQueue.shift(),card=$('acquisition-notice');card.replaceChildren();
+  window.TrainAudio?.playEffect('clue-coin');
   const art=node('div','acquired-icon');art.append(inventoryArt(item));
   const copy=node('div','acquired-copy');copy.append(node('small','','소지품 획득'),node('strong','',item.name),node('span','','보관함에 보관되었습니다.'));
   const close=button('×',dismissAcquisition,'acquired-close');close.setAttribute('aria-label','획득 알림 닫기');
@@ -239,13 +243,26 @@ function apply(data, force = false, interaction = null) {
   $('scene-world').style.aspectRatio=scene.aspect_ratio||'3 / 2';
   const bg=$('scene-image');if(bg.getAttribute('src')!==scene.background)bg.src=scene.background;
   bg.alt=state.location.name+'의 현재 장면';
+  // Keep the notice unreadable in the room, including before hover and while
+  // another character is speaking. Only the inspection reveals its writing.
+  let obscurer=$('scene-notice-obscurer');
+  if(state.location.id==='car_1'){
+    if(!obscurer){obscurer=noticeObscurer();obscurer.id='scene-notice-obscurer';bg.after(obscurer);}
+    if(obscurer.getAttribute('src')!==scene.background)obscurer.src=scene.background;
+  }else obscurer?.remove();
+  // Only the unused plaque area changes in cars 2 and 3. Keep the original
+  // scene canvas and registrations so every actor and door stays aligned.
+  let repair=$('scene-wall-repair');
+  if(wallRepairRooms.has(state.location.id)){
+    if(!repair){repair=node('div','scene-wall-repair');repair.id='scene-wall-repair';repair.setAttribute('aria-hidden','true');bg.after(repair);}
+  }else repair?.remove();
   $('darkness').hidden=scene.light_mode==='normal';$('darkness').classList.toggle('flashlight-mask',scene.light_mode==='flashlight');if(state.npc){$('darkness').style.setProperty('--beam-x','50%');$('darkness').style.setProperty('--beam-y','48%');}
   $('scene-world').dataset.mode=state.npc?'conversation':'exploration';
   $('scene-caption').textContent=scene.dark?'불이 꺼져 아무것도 보이지 않는다.':state.status!=='playing'?'끝나지 않던 밤의 기록.':'';
   const layer=$('character-layer');layer.replaceChildren();
   const people=state.npc?scene.people.filter(p=>p.active):scene.people;
   people.forEach(p=>{
-    if(!p.active&&p.registration){registeredHotspot(layer,p,()=>act('select_npc',{target:p.id}),true);return;}
+    if(!p.active&&p.registration){registeredHotspot(layer,p,()=>{if(!busy)window.TrainAudio?.playEffect('person-select');act('select_npc',{target:p.id});},true);return;}
     const b=button('',()=>act('select_npc',{target:p.id}),'person-hotspot'+(p.active?' talking':''),true);b.dataset.npc=p.id;
     b.setAttribute('aria-label',p.name+'에게 말 걸기');b.setAttribute('aria-controls','dialogue-box');b.title=p.name+' · 대화 시작';
     const bounds=p.active?[31,3,38,97]:p.bounds;place(b,bounds);
@@ -274,13 +291,16 @@ function apply(data, force = false, interaction = null) {
   fitScene();
 }
 function place(el,bounds){const [x,y,w,h]=bounds;Object.assign(el.style,{left:x+'%',top:y+'%',width:w+'%',height:h+'%'});}
+function noticeObscurer(){
+  const img=node('img','notice-obscurer');img.src=scene.background;img.alt='';img.draggable=false;img.setAttribute('aria-hidden','true');return img;
+}
 function registeredHotspot(layer,p,handler,person=false){
   // Art and background use the same full canvas, with a shared origin and
   // scale. The silhouette clips only the hit area; it never clips the glow.
   const art=p.registration;
   if(art.background!==scene.background)return;
   const sprite=art.render_mode==='sprite';
-  const group=node('div','registered-hotspot'+(sprite?' registered-character':'')+(art.grounded?' grounded-character':''));
+  const group=node('div','registered-hotspot'+(sprite?' registered-character':'')+(art.grounded?' grounded-character':'')+(p.id==='notice'?' notice-hotspot':''));
   const b=button('',handler,(person?'person-hotspot':'world-hotspot')+' registered-hit',true);
   b.style.clipPath='polygon('+art.polygon.map(([x,y])=>x+'% '+y+'%').join(',')+')';
   if(person&&art.hit_path){
@@ -299,6 +319,7 @@ function registeredHotspot(layer,p,handler,person=false){
   if(!sprite)img.style.maskImage='url("'+art.image+'")';
   img.setAttribute('aria-hidden','true');
   const visual=node('div','registered-visual');visual.append(img);
+  if(p.id==='notice')visual.append(noticeObscurer());
   const caption=node('span','hotspot-label registered-label',label);
   const [x,y,w]=art.bounds;
   caption.style.left=Math.max(12,Math.min(88,x+w/2))+'%';caption.style.top=Math.max(11,y-4)+'%';
@@ -513,10 +534,11 @@ function openWindowVideo(){
 }
 function openOverlay(title, view) {
   stopOverlayMedia();overlay.dataset.view=view;
-  overlay.classList.toggle('paper-dialog',!['inventory','control','ending-complete','window'].includes(view));
+  overlay.classList.toggle('paper-dialog',!['inventory','control','ending-complete','window','notice'].includes(view));
   overlay.classList.toggle('device-dialog',view==='control');
   overlay.classList.toggle('ending-dialog',view==='ending-complete');
   overlay.classList.toggle('window-dialog',view==='window');
+  overlay.classList.toggle('notice-dialog',view==='notice');
   overlay.querySelector('.ending-card-art')?.remove();
   $('overlay-title').textContent=title;$('overlay-body').replaceChildren();
   if(!overlay.open)overlay.showModal();
@@ -546,6 +568,7 @@ function openInventory(doc = null, keepCatalogPage = false) {
   const body=openOverlay('보관함','inventory');
   overlay.dataset.inventoryMode=selected?'detail':'overview';
   if(!selected){
+    shownDocument=null;
     const book=node('section','inventory-overview');book.setAttribute('aria-label','낡은 수집품 기록장');
     book.append(node('h3','visually-hidden','INVENTORY · 소지품'));
     const grid=node('div','inventory-grid');grid.setAttribute('aria-label','소지품 목록');
@@ -589,7 +612,14 @@ async function openItem(id) {
   if(state.status!=='playing') { try { const data=await request('/api/item/'+encodeURIComponent(id));openInventory(data.document); }catch(e){setError(e.message,false);} return; }
   await act('read_item',{target:id});
 }
+// Paper documents rustle once when they come into view, not on every re-render of the same page.
+const pagedDocuments=new Set(['route_report','newspaper','facility_manual']);
+let shownDocument=null;
+['page-turn','person-select','lever','door-clunk','clue-coin'].forEach(name=>window.TrainAudio?.preloadEffect(name));
+overlay.addEventListener('close',()=>{shownDocument=null;});
 function renderDocument(page,doc) {
+  if(pagedDocuments.has(doc.id)&&shownDocument!==doc.id)window.TrainAudio?.playEffect('page-turn');
+  shownDocument=doc.id;
   const record=node('img','inventory-record-image');
   record.src=doc.artwork||'/assets/images/inventory/records/'+doc.id.replaceAll('_','-')+'.png';
   record.alt=[doc.title,...(doc.paragraphs||[]),...(doc.fields||[]).map(([key,value])=>key+': '+value)].join('\n');
@@ -636,7 +666,7 @@ function openLever() {
     door:state.door,
     onOperate:target=>act('operate',{target}),
     onInventory:()=>openInventory(),
-    onEnter:async()=>{const data=await act('move',{target:'crew'});if(data?.game.location.id==='crew')overlay.close();}
+    onEnter:async()=>{const data=await act('move',{target:'crew'});if(data?.game.location.id==='crew'){window.TrainAudio?.playEffect('door-clunk');overlay.close();}}
   }).setBusy(busy);
 }
 function openControl() {
@@ -809,8 +839,20 @@ function openSettings() {
   list.append(l,node('p','','진행은 현재 브라우저에 연결된 기록으로 자동 보관됩니다. 잠시 쉬려면 창을 닫고 다시 이어서 조사할 수 있습니다.'),button('조사 기록 보기',openJournal),button('새로운 조사 시작',confirmNewGame));
   if(state?.status==='playing')list.append(button('탈출 포기 여부 선택',()=>act('abandon'),'',true));body.append(list);
 }
-function confirmNewGame() {if(busy)return;const body=openOverlay('새로운 조사 시작','newgame');const c=node('div','modal-content');c.append(node('p','','이 화면은 새 게임으로 시작합니다. 소지품과 진행이 처음 상태로 돌아갑니다. 새로 시작할까요?'));const actions=node('div','modal-actions');actions.append(button('이어서 조사하기',()=>overlay.close()),button('새 게임 시작',()=>startNewGame(),'primary'));c.append(actions);body.append(c);}
-async function startNewGame() {if(busy)return;if(overlay.open)overlay.close();releaseCinematic();document.body.classList.add('game-booting');showSceneLoading(true);setBusy(true);clearError();try{const data=await request('/api/game/new',{username:state?.username||shell.dataset.username||'사용자'});controlDraft={destination:'',password:'0000'};documents.clear();seenEvents.clear();acquisitionQueue=[];dismissAcquisition();selectedDocument=null;lastRequest=null;state=null;await beginGame(data,true);}catch(e){document.body.classList.remove('game-booting');setError(e.message,false);}finally{showSceneLoading(false);setBusy(false);}}
+function confirmNewGame() {if(busy)return;const body=openOverlay('새로운 조사 시작','newgame');const c=node('div','modal-content');c.append(node('p','','진행을 초기화하고 처음 화면으로 돌아갑니다. 승객 이름을 다시 정하고 새 승차권을 발권할 수 있습니다. 새로 시작할까요?'));const actions=node('div','modal-actions');actions.append(button('이어서 조사하기',()=>overlay.close()),button('새 게임 시작',()=>startNewGame(),'primary'));c.append(actions);body.append(c);}
+async function startNewGame() {
+  if(busy)return;
+  showSceneLoading(true);setBusy(true);clearError();let leaving=false;
+  try{
+    await request('/api/game/reset',{});
+    try{sessionStorage.removeItem(openingSeenKey);}catch{}
+    try{localStorage.removeItem('noTerminus.playerName');}catch{}
+    stopOverlayMedia();releaseCinematic();
+    // Return to boarding before creating a replacement game or playing its intro.
+    window.location.replace('/');leaving=true;
+  }catch(e){setError(e.message,false);}
+  finally{if(!leaving){showSceneLoading(false);setBusy(false);}}
+}
 async function sendText(message) { if(overlay.open)overlay.close();$('user-message').value=message;return perform({message}); }
 $('chat-form').addEventListener('submit',e=>{e.preventDefault();if(!state?.npc||state.status!=='playing')return;const message=$('user-message').value.trim();if(message)perform({message});});
 $('user-message').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();$('chat-form').requestSubmit();}});

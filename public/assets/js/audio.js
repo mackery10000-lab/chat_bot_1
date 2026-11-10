@@ -1,4 +1,4 @@
-/* One shared, local music track for the title, boarding and game screens. */
+/* One shared, local music track for the title, boarding and game screens, plus short effects. */
 (() => {
   'use strict';
   const settingsKey = 'noTerminus.settings';
@@ -80,7 +80,28 @@
     if (event.key === muteKey) muted = read(localStorage, muteKey, false) === true;
     sync();
   });
+  // Effects follow the title screen's 효과음 slider, independent of the music toggle.
+  // Recorded effects are mastered loud; keep them well under the music.
+  const effectGain = 0.45;
+  const effects = new Map();
+  function effect(name) {
+    if (!effects.has(name)) {
+      const clip = new Audio(`/assets/audio/${name}.mp3`);
+      clip.preload = 'auto';
+      effects.set(name, clip);
+    }
+    return effects.get(name);
+  }
+  function playEffect(name) {
+    const level = clamp(read(localStorage, settingsKey, {}).sfx ?? 60);
+    if (!level) return;
+    const clip = effect(name).cloneNode();
+    clip.volume = level / 100 * effectGain;
+    clip.play().catch(() => {});
+  }
   window.TrainAudio = Object.freeze({
+    playEffect,
+    preloadEffect: name => { effect(name); },
     element: audio,
     getVolume: () => volume,
     isMuted: () => muted,

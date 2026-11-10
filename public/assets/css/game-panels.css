@@ -103,6 +103,29 @@ html:has(.game-dialog[open]){overflow:hidden}
 .device-dialog #overlay-body{min-height:0;max-height:calc(92dvh - 80px);overflow:auto;padding:8px;scrollbar-width:thin}
 .device-dialog .puzzle-host{--puzzle-image-height:max(140px,calc(92dvh - 260px))}
 
+/* Blur only the writing sampled from the exact scene canvas. The plate, bolts,
+   pointer geometry and every other part of the supplied background stay put. */
+.chat-page .notice-obscurer{position:absolute;inset:0;display:block;width:100%;height:100%;max-width:none;object-fit:fill;pointer-events:none;clip-path:polygon(38.4% 47.05%,43.85% 47.05%,43.85% 50.45%,38.4% 50.45%);filter:blur(3px)}
+.chat-page #scene-notice-obscurer{z-index:0}
+.chat-page .scene-world[data-mode=conversation] #scene-notice-obscurer{filter:blur(3px) brightness(.34)}
+
+/* Seamless walnut inlay over the unused plaque, native rect [492,505,140,80].
+   Its edges blend inside the existing wall; actor, door and light layers stay. */
+.chat-page .scene-wall-repair{position:absolute;z-index:0;left:35.067713%;top:45.049063%;width:9.978617%;height:7.136485%;pointer-events:none;background:url('../images/scenes/passenger-wall-repaired.png') 38.954869% 48.511047% / 1002.142857% 1401.25% no-repeat;mask-image:linear-gradient(to right,transparent,#000 6%,#000 94%,transparent),linear-gradient(to bottom,transparent,#000 8%,#000 92%,transparent);mask-composite:intersect;-webkit-mask-composite:source-in}
+.chat-page .scene-world[data-mode=conversation] .scene-wall-repair{filter:brightness(.34)}
+
+/* Inspection lifts the original notice over the room, without dossier paper. */
+.chat-page .game-dialog.notice-dialog{width:min(1050px,94vw);max-width:94vw;max-height:94dvh;margin:auto;padding:0;border:0;border-radius:0;background:none;box-shadow:none;backdrop-filter:none;overflow:visible}
+.notice-dialog::backdrop{background:#030302bb;backdrop-filter:blur(2px)}
+.chat-page .notice-dialog .overlay-header{position:static;display:contents;padding:0;background:none;border:0}
+.notice-dialog .overlay-header h2{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.chat-page .notice-dialog #overlay-body{padding:0;max-height:94dvh;overflow:visible}
+.chat-page .notice-dialog .notice-art-view{margin:0;padding:0;background:none;filter:drop-shadow(0 12px 25px #0009)}
+.chat-page .notice-dialog .notice-art-view img{display:block;width:100%;height:auto;max-height:88dvh;object-fit:contain}
+.chat-page .notice-dialog .close-button{position:absolute;right:0;top:0;z-index:5;display:grid;place-items:center;width:44px;height:44px;min-width:44px;min-height:44px;padding:0;border:1px solid #bd9b58;border-radius:3px;background:#1d160feb;color:#f0dfba;box-shadow:0 3px 9px #0008;font:30px/1 Georgia,serif}
+.chat-page .notice-dialog .close-button:hover{background:#45321c}
+.chat-page .notice-dialog .close-button:focus-visible{outline:2px solid #f5dfb2;outline-offset:3px}
+
 /* Looking through the carriage's walnut frame, with live scenery behind glass. */
 .chat-page .game-dialog.window-dialog{
   width:min(1120px,98vw,calc(92dvh * 1.5));max-width:98vw;max-height:none;aspect-ratio:3/2;

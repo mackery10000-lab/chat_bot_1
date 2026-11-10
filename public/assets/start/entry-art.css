@@ -1,0 +1,55 @@
+/* Entry artwork changes surfaces only; the existing layout and live form stay. */
+.lamp{position:relative;width:78px;height:61px;flex:none;isolation:isolate;pointer-events:none}
+.lamp__art{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;z-index:1}
+.lamp__emission{position:absolute;inset:0;z-index:2;pointer-events:none}
+.lamp--off .lamp__emission{opacity:0}
+.lamp--flicker .lamp__emission{animation:lamp-contact-flicker 5s linear infinite}
+.lamp__glass-light{position:absolute;left:24%;right:24%;top:40%;bottom:3%;border-radius:42% 42% 50% 50%;background:radial-gradient(ellipse at 48% 38%,#fffaf0 0%,#ffe8baca 43%,#e9c38655 72%,transparent 97%);mix-blend-mode:screen;filter:blur(1px)}
+.lamp__bloom{position:absolute;left:-80%;right:-80%;top:14%;height:230%;background:radial-gradient(ellipse,#ffdda93b,transparent 67%);filter:blur(9px);z-index:-1}
+.lamp__spill{position:absolute;left:50%;top:75%;width:clamp(180px,24vw,350px);height:clamp(280px,43vw,510px);transform:translateX(-50%);background:radial-gradient(ellipse at 50% 0,#f9d79d12,transparent 73%);filter:blur(12px);z-index:-1}
+/* Contact failure once each five-second cycle, with matched glass and spill. */
+@keyframes lamp-contact-flicker{
+  0%,76%,81%,83%,86%,100%{opacity:1}
+  77%,80%{opacity:.07}
+  78%{opacity:.38}
+  82%{opacity:.18}
+  84%{opacity:.6}
+  85%{opacity:.12}
+}
+.icon-btn,.icon-btn:hover{border:0;border-radius:0;background:transparent;box-shadow:none}
+.icon-btn{position:relative;transition:filter .15s}
+.icon-btn img{width:44px;height:44px;object-fit:contain;pointer-events:none;filter:drop-shadow(0 2px 3px #0008)}
+.icon-btn:hover{filter:brightness(1.15)}
+.icon-btn[data-bgm-toggle][aria-pressed=true]::after{content:'';position:absolute;inset:21px 10px 20px;transform:rotate(-45deg);background:#c17859;box-shadow:0 1px 1px #000;pointer-events:none}
+.sign{position:relative;transform:none;animation:none;filter:drop-shadow(0 20px 18px #000a)}
+.sign__chains{position:relative;display:block;padding:0;height:30px;flex:none;overflow:visible}
+.sign__rigging{position:absolute;top:0;left:0;width:100%;height:100px;overflow:visible;z-index:3;pointer-events:none}
+.sign__cord{fill:none;stroke:url(#cord-brass);stroke-width:3;stroke-linecap:round;filter:drop-shadow(1px 1px 1px #000);vector-effect:non-scaling-stroke}
+.sign__fray{fill:none;stroke:#b49a6b;stroke-width:.65;stroke-linecap:round;opacity:.7;vector-effect:non-scaling-stroke;pointer-events:none}
+.sign__frame{position:relative;transform-origin:82.0442% 5.5249%;background:url('images/entry-sign.png') center / 100% 100% no-repeat;will-change:auto}
+.sign[data-phase=sagging] .sign__frame{will-change:transform}
+.sign__frame.concave-all{mask:none;-webkit-mask:none}
+.sign__board{background:none;box-shadow:none}
+.sign__line,.sign__wear{display:none}
+.sign__strip{background:url('images/entry-sign.png') center 90% / calc(100% + 40px) 700% no-repeat;border-top-color:transparent}
+/* New printed paper and hammered fascia retain every existing box dimension. */
+.booth__slot{background:url('images/entry-ticket-machine.png') center 90% / 100% 145% no-repeat;box-shadow:0 10px 22px #0008;border-radius:26px 26px 14px 14px / 30px 30px 14px 14px}
+.booth__slot::before{border:0;box-shadow:none}
+.booth__rivet{background:none;box-shadow:none}
+.booth__plate{background:transparent;box-shadow:none}
+.booth__opening{background:url('images/entry-ticket-machine.png') center bottom / 109% 410% no-repeat;box-shadow:inset 0 1px 1px #c3a16a70,0 3px 6px #0008}
+.booth__opening::after{background:#080604;box-shadow:inset 0 2px 3px #000}
+.pass{background:#e7d4ac url('images/entry-ticket-paper.png') center / 100% 100% no-repeat;box-shadow:0 16px 30px #0008}
+.pass::before{border-color:#7d59334d;outline-color:#7d593330}
+.pass__blot{border-radius:0;background:url('images/entry-ink-blot.svg') center / contain no-repeat;filter:none}
+.dice{border-color:transparent;border-radius:2px;border-image:url('../images/ui/choice-paper.png') 225 96 225 96 fill / 0 10px 0 10px stretch;background:none}
+.issue{border-image:url('../images/ui/choice-paper.png') 225 96 225 96 fill / 0 12px 0 12px stretch;background:none;box-shadow:0 5px 8px #0008}
+.issue:disabled{border:1px dashed #5a4630;border-image:url('../images/ui/hint-paper.png') 210 96 214 96 fill / 0 12px 0 12px stretch;background:none;box-shadow:none}
+.back-link{border-image:url('../images/ui/hint-paper.png') 210 96 214 96 fill / 0 12px 0 12px stretch;background:none;border-color:#5a4630;border-radius:3px}
+.settings__card{background:#e8dbb8 url('../images/ui/note-paper.png') center / cover no-repeat}
+.no-fx .lamp--flicker .lamp__emission{animation:none;opacity:1}
+@media(max-width:600px){.top-actions{top:86px}}
+@media(prefers-reduced-motion:reduce){
+  .lamp--flicker .lamp__emission{animation:none;opacity:1}
+  .icon-btn{transition:none}
+}
