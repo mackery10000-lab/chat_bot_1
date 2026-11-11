@@ -44,10 +44,18 @@ function prepareImage(src) {
 async function prepareScene(data,force=false) {
   window.TrainLoading?.setReady();
   const changed=force||!state||data.game.location.id!==state.location.id;
-  if(changed) showSceneLoading(true);
+  const traveled=!!state&&data.game.location.id!==state.location.id;
+  let movementReady=Promise.resolve();
+  if(traveled){
+    if(overlay.open)overlay.close();
+    if(window.TrainLoading){window.TrainLoading.showMovement(data.game.location.name);movementReady=window.TrainLoading.waitForMovement();}
+    else{showSceneLoading(true);movementReady=new Promise(resolve=>setTimeout(resolve,1000));}
+  }else if(changed)showSceneLoading(true);
   const surfaces=!state?['dialogue-paper','chat-input','choice-paper','hint-paper','train-window-frame'].map(name=>prepareImage('/assets/images/ui/'+name+'.png')):[];
   const roomArt=wallRepairRooms.has(data.game.location.id)?[prepareImage(wallRepairImage)]:[];
-  await Promise.all([...surfaces,...roomArt,prepareImage(data.scene.background),...data.scene.people.filter(p=>p.active||!data.game.npc).map(p=>prepareImage(!p.active&&p.registration?p.registration.image:p.image)),...(data.scene.hotspots||[]).filter(p=>p.image).map(p=>prepareImage(p.image)),...(data.ui?.document?.artwork?[prepareImage(data.ui.document.artwork)]:[])]);
+  const artwork=Promise.all([...surfaces,...roomArt,prepareImage(data.scene.background),...data.scene.people.filter(p=>p.active||!data.game.npc).map(p=>prepareImage(!p.active&&p.registration?p.registration.image:p.image)),...(data.scene.hotspots||[]).filter(p=>p.image).map(p=>prepareImage(p.image)),...(data.ui?.document?.artwork?[prepareImage(data.ui.document.artwork)]:[])]);
+  const [loaded]=await Promise.allSettled([artwork,movementReady]);
+  if(loaded.status==='rejected')throw loaded.reason;
 
 }
 function acquisition(events) {
@@ -97,9 +105,9 @@ async function perform(content,reuse=false) {
   if(busy||!state||cinematic.open)return null;clearError();$('reply-status').textContent='';
   let focusComposer=false;
   const body=reuse?content:{...content,request_id:crypto.randomUUID?crypto.randomUUID():'turn_'+Date.now()+'_'+Math.random().toString(36).slice(2),revision:state.revision};
-  const likelyTravel=typeof body.message==='string'&&/^(?:[1-4]호차|다음\s*칸|이전\s*칸|승무원실|기관실)(?:로|으로)?\s*(?:이동|가겠|갑니다|간다|돌아|들어갑)/.test(body.message.trim())&&!/않|안\s*가|했|다면|[?]/.test(body.message);
-  const expectedTransition=likelyTravel||body.action?.type==='move'||(body.action?.type==='confirm'&&state.confirmation?.kind==='control');
-  lastRequest=body;setBusy(true);if(expectedTransition){if(overlay.open)overlay.close();showSceneLoading(true);}
+  // The server's actual location change starts the passage scene. This also
+  // covers free-text movement, without flashing it for rejected travel requests.
+  lastRequest=body;setBusy(true);
   try {
     const data=await request('/api/chat',body);await prepareScene(data);apply(data,false,body);lastRequest=null;
     if(body.action?.type==='present'&&overlay.open&&!data.ui?.inventory&&!data.ui?.document&&!data.game.confirmation)overlay.close();
@@ -199,35 +207,30 @@ function updateLocationNotice(previous) {
   },5000);
 }
 function fitDialogueFont() {
-  // Dialogue, choices and typed input share one size, scaled to the dialogue paper
-  // (the scene less its margin, up to the paper's 880px limit).
-  const paper=Math.min(document.querySelector('.scene-frame').clientWidth-20,880);
-  const size=Math.min(18,Math.max(11,6.3+paper*.0133));
-  shell.style.setProperty('--dialogue-font',size.toFixed(2)+'px');
+  // Reflow live text at a readable size instead of scaling a rasterized UI.
+  const paper=Math.min(document.querySelector('.scene-frame').clientWidth-20,1020);
+  const size=Math.round(Math.min(20,Math.max(14,7+paper*.013))*2)/2;
+  shell.style.setProperty('--dialogue-font',size+'px');
 }
 function fitScene() {
   if(sceneLayoutFrame!==null)return;
   sceneLayoutFrame=requestAnimationFrame(()=>{
     sceneLayoutFrame=null;
     const frame=document.querySelector('.scene-frame');
-    if(window.innerWidth<=700){
-      shell.style.removeProperty('--scene-width');return;
-    }
-    // Only the fixed map roller belongs in the viewport budget. The unfolded
-    // sheet takes its natural space without changing the scene or HUD scale.
-    const css=getComputedStyle(shell),map=document.querySelector('.train-map-bar');
+    const viewport=document.querySelector('.scene-viewport');
+    if(!viewport)return;
     const px=value=>parseFloat(value)||0;
-    const padding=px(css.paddingTop)+px(css.paddingBottom);
-    const mapCss=getComputedStyle(map);
-    const mapSpace=$('map-toggle').offsetHeight+px(mapCss.paddingTop)+px(mapCss.paddingBottom)+px(mapCss.marginBottom);
-    const viewportHeight=window.visualViewport?.height||document.documentElement.clientHeight;
     const border=getComputedStyle(frame);
     const borderHeight=px(border.borderTopWidth)+px(border.borderBottomWidth);
     const borderWidth=px(border.borderLeftWidth)+px(border.borderRightWidth);
-    const available=Math.max(160,viewportHeight-padding-mapSpace-borderHeight-126);
     const ratio=String(scene?.aspect_ratio||'3 / 2').split('/').map(Number);
     const aspect=ratio.length===2&&ratio.every(n=>Number.isFinite(n)&&n>0)?ratio[0]/ratio[1]:1.5;
-    shell.style.setProperty('--scene-width',(available*aspect+borderWidth)+'px');
+    // The viewport reserves the real map/composer space through CSS grid. Fit
+    // width AND height, keeping actors, background and hit areas on one canvas.
+    const width=Math.max(0,Math.min(viewport.clientWidth-borderWidth,(viewport.clientHeight-borderHeight)*aspect));
+    const pixels=window.devicePixelRatio||1;
+    shell.style.setProperty('--scene-width',(Math.floor(width*pixels)/pixels+borderWidth)+'px');
+    fitDialogueFont();
   });
 }
 function apply(data, force = false, interaction = null) {
@@ -539,7 +542,7 @@ function openOverlay(title, view) {
   overlay.classList.toggle('ending-dialog',view==='ending-complete');
   overlay.classList.toggle('window-dialog',view==='window');
   overlay.classList.toggle('notice-dialog',view==='notice');
-  overlay.querySelector('.ending-card-art')?.remove();
+  overlay.querySelector('.ending-card-art')?.remove();overlay.querySelector('.ending-result')?.remove();
   $('overlay-title').textContent=title;$('overlay-body').replaceChildren();
   if(!overlay.open)overlay.showModal();
   placeAcquisition();return $('overlay-body');
@@ -627,7 +630,7 @@ function renderDocument(page,doc) {
   const actions=node('div','document-actions');
   if(state.status==='playing') {
     if(doc.id==='route_report'&&!state.inventory.find(item=>item.id==='route_report')?.read)actions.append(paperAction('보고서 내용 확인',()=>confirmReport(true),'confirm-report'));
-    if(doc.id==='flashlight')actions.append(paperAction('손전등 사용',async()=>{if(await act('use_item',{target:doc.id}))overlay.close();},'use-flashlight'));
+    if(doc.id==='flashlight' && state.location.id==='car_3' && scene?.light_mode==='dark')actions.append(paperAction('손전등 사용',async()=>{if(await act('use_item',{target:doc.id}))overlay.close();},'use-flashlight'));
     if(doc.id==='ticket_old' && state.location.id==='car_3') {
       const returned=state.inventory.find(i=>i.id==='ticket_old')?.name.includes('조사 기록');
       actions.append(paperAction(returned?'노인에게 조사 기록 보여주기':'노인에게 원본 돌려드리기',()=>act('present',{target:'ticket_old',recipient:'elder'}),returned?'show-ticket-record':'return-ticket'));
@@ -710,8 +713,10 @@ function showEndingComplete(kind) {
   const body=openOverlay(good?'긴 밤의 끝':'영원한 승객','ending-complete');
   const art=node('img','ending-card-art');art.src='/assets/images/ui/ending-certificate'+(good?'':'-sad')+'.png';
   art.alt='';art.draggable=false;art.setAttribute('aria-hidden','true');overlay.prepend(art);
+  // 결과가 한눈에 보이도록 제목 위에 성공·실패를 크게 표시한다.
+  $('overlay-title').before(node('p','ending-result',good?'탈출 성공':'탈출 실패'));
   const content=node('section','ending-complete');
-  content.append(node('p','',good?'당신의 조사가 끝났습니다.':'열차의 밤은 계속됩니다.'));
+  content.append(node('p','',good?'당신은 끝없는 열차에서 벗어나 현실로 돌아왔습니다.':'열차를 벗어나지 못했습니다. 열차의 밤은 계속됩니다.'));
   const restart=button('처음부터 다시 시작',()=>startNewGame(),'brass-button');restart.id='ending-restart';
   content.append(restart);body.append(content);
 }
@@ -874,7 +879,8 @@ fitDialogueFont();
 window.addEventListener('resize',fitDialogueFont);
 if(window.ResizeObserver){
   new ResizeObserver(fitDialogueFont).observe(document.querySelector('.scene-frame'));
-  new ResizeObserver(fitScene).observe($('map-toggle'));
+  const sceneObserver=new ResizeObserver(fitScene);
+  sceneObserver.observe(document.querySelector('.scene-viewport'));
 }
 (async()=>{showSceneLoading(true);setBusy(true);try{const params=new URLSearchParams(location.search);let data,newGame=false;if(params.get('new')==='1'){newGame=true;data=await request('/api/game/new',{username:shell.dataset.username||'사용자'});params.delete('new');history.replaceState(null,'',location.pathname+(params.toString()?'?'+params:''));}else{try{data=await request('/api/game');}catch(e){if(e.code!=='game_missing')throw e;newGame=true;data=await request('/api/game/new',{username:shell.dataset.username||'사용자'});}}await beginGame(data,newGame);}catch(e){document.body.classList.remove('game-booting');setError(e.message,false);$('save-status').textContent='불러오기 실패';}finally{showSceneLoading(false);setBusy(false);}})();
 

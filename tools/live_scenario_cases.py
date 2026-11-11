@@ -205,7 +205,6 @@ def _ending_branches(runner):
 
     for name, destination, password in (
         ("old-year", "아지산역", "2016"),
-        ("short-station", "아지산", "2026"),
         ("wrong-station", "다른역", "2026"),
     ):
         case = runner.fork("bad-wrong-control-" + name, "engine-after-proof")
@@ -218,6 +217,13 @@ def _ending_branches(runner):
         case.expect_terminal("bad")
         case.expect("game.reason", "wrong_control")
         case.expect("game.attempts", 0)
+
+    case = runner.fork("good-short-station", "engine-after-proof")
+    case.action("prepare_control", destination=" 아지산 ", password="2026")
+    _playing(case)
+    _confirm(case)
+    case.expect_terminal("good")
+    case.expect("game.attempts", 0)
 
     case = runner.fork("control-invalid-format-preserves-attempt", "engine-after-proof")
     for destination, password in (("", "2026"), ("아지산역", "26"),

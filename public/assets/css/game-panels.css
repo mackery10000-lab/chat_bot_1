@@ -42,6 +42,7 @@ html:has(.game-dialog[open]){overflow:hidden}
   border:0 solid transparent;border-radius:0;background:none;
   border-image:url('../images/ui/hint-paper.png') 210 96 214 96 fill / 0 8px 0 8px stretch;
   color:#f0dfbd;font:30px/1 Georgia,serif;box-shadow:0 2px 4px #3d251f40;
+  -webkit-text-stroke-width:0;
 }
 .chat-page .paper-dialog .close-button:hover{filter:brightness(1.16)}
 .paper-dialog #overlay-body{
@@ -122,7 +123,7 @@ html:has(.game-dialog[open]){overflow:hidden}
 .chat-page .notice-dialog #overlay-body{padding:0;max-height:94dvh;overflow:visible}
 .chat-page .notice-dialog .notice-art-view{margin:0;padding:0;background:none;filter:drop-shadow(0 12px 25px #0009)}
 .chat-page .notice-dialog .notice-art-view img{display:block;width:100%;height:auto;max-height:88dvh;object-fit:contain}
-.chat-page .notice-dialog .close-button{position:absolute;right:0;top:0;z-index:5;display:grid;place-items:center;width:44px;height:44px;min-width:44px;min-height:44px;padding:0;border:1px solid #bd9b58;border-radius:3px;background:#1d160feb;color:#f0dfba;box-shadow:0 3px 9px #0008;font:30px/1 Georgia,serif}
+.chat-page .notice-dialog .close-button{position:absolute;right:0;top:0;z-index:5;display:grid;place-items:center;width:44px;height:44px;min-width:44px;min-height:44px;padding:0;border:1px solid #bd9b58;border-radius:3px;background:#1d160feb;color:#f0dfba;box-shadow:0 3px 9px #0008;font:30px/1 Georgia,serif;-webkit-text-stroke-width:0}
 .chat-page .notice-dialog .close-button:hover{background:#45321c}
 .chat-page .notice-dialog .close-button:focus-visible{outline:2px solid #f5dfb2;outline-offset:3px}
 
@@ -141,13 +142,13 @@ html:has(.game-dialog[open]){overflow:hidden}
 .window-dialog .window-frame-art{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;pointer-events:none;filter:drop-shadow(0 12px 20px #0009)}
 .window-dialog .window-glass{position:absolute;inset:0;pointer-events:none;background:linear-gradient(116deg,#f0d5a408,transparent 31%,transparent 71%,#efd5a40b),linear-gradient(0deg,#0e100b50,transparent 20%,transparent 85%,#0908063d);box-shadow:inset 0 0 22px #0007}
 .chat-page .window-dialog .window-video-status{position:absolute;left:4%;right:4%;bottom:5%;margin:0;padding:9px 12px;background:#080a08dd;border:1px solid #9c8052;color:#f0dfbb;text-align:center;font:400 clamp(11px,1.3vw,15px)/1.7 var(--font);pointer-events:none}
-.chat-page .window-dialog .close-button{position:absolute;right:2.1%;top:2.1%;z-index:5;display:grid;place-items:center;width:44px;height:44px;min-width:44px;min-height:44px;padding:0;border:1px solid #bd9b58;border-radius:3px;background:#1d160feb;color:#f0dfba;box-shadow:0 3px 9px #0008;font:30px/1 Georgia,serif}
+.chat-page .window-dialog .close-button{position:absolute;right:2.1%;top:2.1%;z-index:5;display:grid;place-items:center;width:44px;height:44px;min-width:44px;min-height:44px;padding:0;border:1px solid #bd9b58;border-radius:3px;background:#1d160feb;color:#f0dfba;box-shadow:0 3px 9px #0008;font:30px/1 Georgia,serif;-webkit-text-stroke-width:0}
 .chat-page .window-dialog .close-button:hover{background:#45321c}
 .chat-page .window-dialog .close-button:focus-visible{outline:2px solid #f5dfb2;outline-offset:3px}
 
 /* Render the complete certificate at its native ratio. Never slice its seal. */
 .chat-page .game-dialog.ending-dialog{
-  --ending-ink:#63372b;--ending-copy:#70513d;
+  --ending-ink:#63372b;--ending-copy:#70513d;--ending-result:#8a5a1c;
   position:fixed;width:min(720px,96vw,calc(92dvh * 1.5));max-width:96vw;max-height:none;
   aspect-ratio:3/2;margin:auto;padding:0;border:0;border-radius:0;background:none;
   box-shadow:none;backdrop-filter:none;overflow:hidden;container-type:inline-size;font-family:var(--font);
@@ -155,15 +156,16 @@ html:has(.game-dialog[open]){overflow:hidden}
 .chat-page .ending-dialog[open]{display:block}
 .chat-page .ending-dialog:focus{outline:none}
 .ending-dialog .ending-card-art{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;pointer-events:none}
-.chat-page .ending-dialog .overlay-header{position:absolute;inset:33% 7% auto;display:block;padding:0;border:0;background:none;text-align:center}
+.chat-page .ending-dialog .ending-result{margin:0 0 .35em;color:var(--ending-result);font:400 clamp(26px,7.5cqw,56px)/1.15 var(--font);letter-spacing:.12em;-webkit-text-stroke:.04em currentColor}
+.chat-page .ending-dialog .overlay-header{position:absolute;inset:27% 7% auto;display:block;padding:0;border:0;background:none;text-align:center}
 .chat-page .ending-dialog .overlay-header h2{margin:0;color:var(--ending-ink);font:400 clamp(20px,5.5cqw,40px)/1.35 var(--font);letter-spacing:0}
 .ending-dialog .close-button{display:none}
-.ending-dialog #overlay-body{position:absolute;inset:52% 8% 10%;padding:0;overflow:visible;color:var(--ending-copy);font-family:var(--font)}
+.ending-dialog #overlay-body{position:absolute;inset:58% 8% 10%;padding:0;overflow:visible;color:var(--ending-copy);font-family:var(--font)}
 .ending-dialog .ending-complete{display:flex;flex-direction:column;align-items:center;justify-content:space-between;gap:8px;height:100%;padding:0;text-align:center}
 .ending-dialog .ending-complete p{margin:0;color:var(--ending-copy);font-size:clamp(12px,2.5cqw,18px);line-height:1.6;word-break:keep-all}
 .ending-dialog #ending-restart{display:flex;justify-content:center;gap:0;min-width:0;width:min(72%,240px);min-height:clamp(30px,6.4cqw,46px);padding:6px 12px;border:0 solid transparent;border-radius:0;border-image:url('../images/ui/choice-paper.png') 225 96 225 96 fill / 0 16px 0 16px stretch;background:none;box-shadow:none;font:400 clamp(12px,2.25cqw,16px)/1.4 var(--font);color:#473326}
 .ending-dialog #ending-restart:hover{filter:brightness(1.08)}
-.chat-page .ending-dialog[data-ending=bad]{--ending-ink:#eeeae0;--ending-copy:#d8d7d2}
+.chat-page .ending-dialog[data-ending=bad]{--ending-ink:#eeeae0;--ending-copy:#d8d7d2;--ending-result:#d9a19a}
 .ending-dialog[data-ending=bad] #ending-restart{border-image-source:url('../images/ui/hint-paper.png');border-image-slice:210 96 214 96 fill;filter:grayscale(1);color:#eeeae0}
 
 @media(max-width:700px){

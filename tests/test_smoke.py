@@ -539,7 +539,7 @@ class SmokeTest(GameTestCase):
 
     def test_good_paths_both_evidence_items_and_spaces(self):
         for evidence in ("ticket_current", "newspaper"):
-            for dest in ("아지산역",):
+            for dest in ("아지산역", "아지산", " 아지산역 ", " 아지산 "):
                 for pw in ("2026", " 2026 "):
                     with self.subTest(evidence=evidence, dest=dest, pw=pw):
                         self.new()
@@ -562,6 +562,8 @@ class SmokeTest(GameTestCase):
             ("아지산역", "2016"),
             ("아지산역", "0000"),
             ("다른역", "2026"),
+            ("아지산역역", "2026"),
+            ("아지산 다른역", "2026"),
         ]:
             with self.subTest(dest=dest, pw=pw):
                 self.new()
@@ -1491,11 +1493,34 @@ class DocumentRouteTest(GameTestCase):
         self.assertFalse(self.flags().get("current_ticket_read"))
         self.assertTrue(self.flags()["year_proven"])
 
-    def test_doc_destination_requires_full_station_name(self):
-        self.engine(); self.prove(); self.submit("아지산", "2026")
-        self.assertEqual(self.data["game"]["status"], "bad")
-        self.assertEqual(self.data["game"]["reason"], "wrong_control")
+    def test_short_destination_preserves_confirmation_and_last_attempt(self):
+        self.engine(); self.prove()
+        self.a("prepare_control", destination=" 아지산 ", password="2026")
+        self.assertEqual(self.data["game"]["confirmation"]["destination"], "아지산")
+        self.assertEqual(self.data["game"]["attempts"], 1)
+        self.a("cancel")
+        self.assertEqual(self.data["game"]["attempts"], 1)
+        self.submit("아지산", "2026")
+        self.assertEqual(self.data["game"]["status"], "good")
         self.assertEqual(self.data["game"]["attempts"], 0)
+
+    def test_flashlight_can_only_be_turned_on_in_dark_car_three(self):
+        base = self.service.store.get(self.client.get_cookie(web.COOKIE).value)
+        base["inventory"].append("flashlight")
+        for location in (place["id"] for place in self.data["game"]["map"]):
+            for light_on in (False, True):
+                with self.subTest(location=location, light_on=light_on):
+                    state = deepcopy(base)
+                    state["location"] = location
+                    state["flags"]["light_on"] = light_on
+                    result = self.service.engine.apply_action(state, {"type": "use_item", "target": "flashlight"})
+                    if location == "car_3" and not light_on:
+                        self.assertTrue(state["flags"]["light_on"])
+                        self.assertIn("손전등을 켜서", result["canonical"])
+                    else:
+                        self.assertEqual(state["flags"]["light_on"], light_on)
+                        self.assertEqual(state["journal"], base["journal"])
+                        self.assertNotIn("손전등을 켜서", result["canonical"])
 
     def test_correct_control_finishes_immediately_and_survives_reload(self):
         self.engine(); self.prove(); self.submit()
