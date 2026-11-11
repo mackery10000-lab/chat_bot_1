@@ -133,7 +133,11 @@ function updateDialogue(data, interaction, previous) {
   const traveled=previous&&previous.location.id!==state.location.id;
   const endedTalk=!state.npc&&reply.startsWith('대화를 마치고 주변으로 시선을 돌렸다.');
   const exploring=action==='look'||action==='end_talk'||action==='hint'||(action==='move'&&interaction.action.target===state.location.id);
-  if((!interaction&&!restoring)||data.ui?.ignored||!reply||traveled||endedTalk||exploring||state.status!=='playing') {
+  // 마지막 대사를 보여주는 동안 다른 갱신(저장 상태 재조회 등)이 대사창을 닫지 않게 한다.
+  if(endingTimer&&state.status!=='playing')return;
+  // 게임이 막 끝난 턴의 인물 대사(기관사가 내쫓는 말)는 엔딩 영상 전에 보여준다.
+  const finalWords=previous?.status==='playing'&&state.status!=='playing'&&!!state.npc;
+  if((!interaction&&!restoring)||data.ui?.ignored||!reply||traveled||endedTalk||exploring||(state.status!=='playing'&&!finalWords)) {
     setDialogueVisible(false);return;
   }
   const speaker=entry?.role!=='user'&&entry?.text===data.reply?entry.speaker:'차내';
@@ -261,7 +265,7 @@ function apply(data, force = false, interaction = null) {
   }else repair?.remove();
   $('darkness').hidden=scene.light_mode==='normal';$('darkness').classList.toggle('flashlight-mask',scene.light_mode==='flashlight');if(state.npc){$('darkness').style.setProperty('--beam-x','50%');$('darkness').style.setProperty('--beam-y','48%');}
   $('scene-world').dataset.mode=state.npc?'conversation':'exploration';
-  $('scene-caption').textContent=scene.dark?'불이 꺼져 아무것도 보이지 않는다.':state.status!=='playing'?'끝나지 않던 밤의 기록.':'';
+  $('scene-caption').textContent=scene.dark?'불이 꺼져 아무것도 보이지 않는다.':'';
   const layer=$('character-layer');layer.replaceChildren();
   const people=state.npc?scene.people.filter(p=>p.active):scene.people;
   people.forEach(p=>{
@@ -279,7 +283,13 @@ function apply(data, force = false, interaction = null) {
   $('item-count').textContent=state.inventory.length; $('bag-btn').classList.toggle('bag-pulse',!!state.bag_hint);
   renderLinearMap();renderSceneActions();
   acquisition((data.events||[]).filter(e=>e.type==='item_acquired'));
-  if(state.status!=='playing') openEnding();
+  if(state.status!=='playing'){
+    // 기관사가 내쫓는 대사처럼 실패 직후 인물 대사가 있으면, 대사를 먼저 보여준 뒤 엔딩 영상으로 넘어간다.
+    if(previous?.status==='playing'&&state.npc&&data.reply){
+      if(overlay.open){stopOverlayMedia();overlay.close();}
+      scheduleEnding(data.reply);
+    }else if(!endingTimer)openEnding();
+  }
   else if(state.confirmation) openConfirmation();
   else if(data.ui?.document) { selectedDocument=data.ui.document;documents.set(selectedDocument.id,selectedDocument);openInventory(selectedDocument); }
   else if(data.ui?.notice) openNotice();
@@ -491,7 +501,7 @@ function renderSceneActions(){
  const layer=$('scene-hotspots');layer.replaceChildren();
  if(state.status!=='playing')return;
  (scene.hotspots||[]).forEach(p=>{const interact=()=>{
-   if(p.kind==='focus'){if(p.target==='door')openLever();else if(p.target==='control'){if(state.controls.control)openControl();else if(state.controls.proof)openInventory();else toast('먼저 기관사에게 장치에 관해 물어보세요.');}}
+   if(p.kind==='focus'){if(p.target==='door')openLever();else if(p.target==='control'){if(state.controls.control)openControl();else if(state.controls.proof)openInventory();else toast('먼저 기관사와 장치, 그리고 지금이 몇 년인지에 관해 이야기해 보세요.');}}
    else act(p.kind,{target:p.target});
  };
  if(p.kind==='move'&&p.polygon){navigationHotspot(layer,p,interact);return;}
@@ -814,6 +824,15 @@ cinematicVideo.addEventListener('ratechange',()=>{if(cinematicActive&&cinematicV
 window.addEventListener('pagehide',()=>{cinematicLeaving=true;cinematicVideo.pause();});
 window.addEventListener('pageshow',()=>{cinematicLeaving=false;if(cinematicActive)resumeCinematic?.();});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&cinematicActive)resumeCinematic?.();});
+let endingTimer=null;
+function scheduleEnding(text) {
+  clearTimeout(endingTimer);
+  const box=$('dialogue-box');
+  const go=()=>{clearTimeout(endingTimer);endingTimer=null;box.removeEventListener('click',go);openEnding();};
+  // 읽을 시간을 주되 너무 오래 붙잡지 않는다. 대사창을 누르면 바로 넘어간다.
+  endingTimer=setTimeout(go,Math.min(9000,2500+String(text).length*55));
+  box.addEventListener('click',go);
+}
 function openEnding() {
   if(!state?.ending_video)return;
   if(cinematic.open&&cinematic.dataset.kind===state.ending_video.kind)return;

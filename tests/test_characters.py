@@ -151,6 +151,52 @@ class CharacterDialogueTest(GameTestCase):
         self.assertIn("협조", character_mood("driver", {"year_proven": True}))
 
 
+class YearClaimBeforeEvidenceTest(GameTestCase):
+    def test_evidence_opens_only_after_saying_it_is_not_2016(self):
+        self.engine()
+        self.a("prepare_evidence", "ticket_current")
+        self.assertIsNone(self.data["game"]["confirmation"])
+        self.assertIn("2016년이 아니라고 말해야", self.data["reply"])
+        self.assertFalse(self.data["game"]["controls"]["proof"])
+        # 청소원 분실물 설명처럼 '직접 말한다' 선택지가 입력창을 연다.
+        self.a("select_npc", "driver")
+        labels = [c["label"] for c in self.data["game"]["choices"]]
+        self.assertEqual(labels, ["지금이 몇 년인지 직접 말한다."])
+        choice = self.data["game"]["choices"][0]
+        self.call(action=choice["action"])
+        self.assertTrue(self.data["ui"].get("compose"))
+        self.assertFalse(self.flags().get("year_claimed"))
+        self.call(value=intent(target="driver", topic="year"), message="지금 몇 년이에요?")
+        self.assertFalse(self.flags().get("year_claimed"))
+        # 자유 대화로 분류돼도 주장은 진행으로 처리된다.
+        claim = dict(intent(target="driver", topic="other"), dialogue_mode="lore")
+        self.call(value=claim, message="기관사님, 지금은 2016년이 아니에요.")
+        self.assertTrue(self.flags()["year_claimed"])
+        self.assertIn("증명할 자료", self.data["reply"])
+        self.assertTrue(self.data["game"]["controls"]["proof"])
+        self.assertIn("보관함에서 자료를 살펴본다.", [c["label"] for c in self.data["game"]["choices"]])
+        self.a("prepare_evidence", "ticket_current")
+        self.assertEqual(self.data["game"]["confirmation"]["kind"], "evidence")
+
+
+class DriverDismissalTest(GameTestCase):
+    def test_wrong_evidence_lets_the_driver_send_the_player_out_before_the_ending(self):
+        self.engine()
+        self.prove("elder_testimony")
+        self.assertEqual(self.data["game"]["status"], "bad")
+        self.assertIn("당장 기관실에서 나가십시오", self.data["reply"])
+        self.assertEqual(self.data["game"]["npc"], "driver")
+        self.assertEqual(self.data["game"]["ending_video"]["kind"], "bad")
+
+    def test_wrong_final_input_also_ends_with_the_driver_line(self):
+        self.engine()
+        self.prove()
+        self.submit(password="2016")
+        self.assertEqual(self.data["game"]["status"], "bad")
+        self.assertIn("분기기가 완전히 잠겼습니다", self.data["reply"])
+        self.assertEqual(self.data["game"]["npc"], "driver")
+
+
 class ElderTripQuestionTest(GameTestCase):
     def test_answering_where_the_player_is_going_continues_the_elder_story(self):
         self.three()
