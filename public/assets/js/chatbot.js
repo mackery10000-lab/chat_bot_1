@@ -353,7 +353,10 @@ function apply(data, force = false, interaction = null) {
   if(state.status!=='playing'){
     // 기관사가 내쫓는 대사처럼 실패 직후 인물 대사가 있으면, 대사를 먼저 보여준 뒤 엔딩 영상으로 넘어간다.
     if(previous?.status==='playing'&&state.npc&&data.reply){
+
       if(overlay.open){stopOverlayMedia();closeDialog(overlay);}
+
+      if(overlay.open){stopOverlayMedia();overlay.close();}
       scheduleEnding(data.reply);
     }else if(!endingTimer)openEnding();
   }
@@ -799,8 +802,12 @@ function showEndingComplete(kind) {
   overlay.dataset.ending=good?'good':'bad';
   const body=openOverlay(good?'긴 밤의 끝':'영원한 승객','ending-complete');
   const art=node('img','ending-card-art');art.src='/assets/images/ui/ending-certificate'+(good?'':'-sad')+'.png';
+
   art.alt='';art.draggable=false;art.setAttribute('aria-hidden','true');
   art.onerror=()=>{if(art.isConnected){art.hidden=true;overlay.classList.add('ending-art-failed');}};overlay.prepend(art);
+
+  art.alt='';art.draggable=false;art.setAttribute('aria-hidden','true');overlay.prepend(art);
+
   // 결과가 한눈에 보이도록 제목 위에 성공·실패를 크게 표시한다.
   $('overlay-title').before(node('p','ending-result',good?'탈출 성공':'탈출 실패'));
   const content=node('section','ending-complete');
