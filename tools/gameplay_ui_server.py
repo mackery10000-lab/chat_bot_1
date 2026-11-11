@@ -53,7 +53,7 @@ def seed():
         state['read'].append('route_report')
     if phase in ('proof','driver','control'):
         state['location']='engine'
-        state['flags'].update(engine_permission=True,driver_explained=phase in ('proof','control'),year_proven=phase=='control')
+        state['flags'].update(engine_permission=True,driver_explained=phase in ('proof','control'),year_claimed=phase in ('proof','control'),year_proven=phase=='control')
     elif phase=='crew': state['location']='crew'
     elif phase in ('car4','door'):
         state['location']='car_4'

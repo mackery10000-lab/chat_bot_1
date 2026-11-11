@@ -126,6 +126,8 @@ def _earn_checkpoints(runner):
     for suffix in (".stop", ".station", ".password"):
         _choose(case, suffix)
     _flag(case, "driver_explained", fatal=True)
+    case.say("지금은 2016년이 아니라 2026년입니다.")
+    _flag(case, "year_claimed", fatal=True)
     case.action("prepare_evidence", "ticket_current")
     _playing(case)
     _flag(case, "year_proven", False)

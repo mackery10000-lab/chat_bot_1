@@ -29,6 +29,12 @@ ANOMALY_OBSERVATION = (
     r"반복|되풀이|순환|맴돌|같은\s*(?:곳|구간|풍경|터널|다리|철교|선로)|(?:터널|다리|철교).{0,10}(?:또|다시)|"
     r"시계.{0,10}(?:멈|안\s*가)|시간.{0,8}(?:멈|안\s*가|그대로)"
 )
+# 기관사에게 '지금은 2016년이 아니다'라고 주장하는 말. 이 주장을 해야 보관함에서 증거를 낼 수 있다.
+YEAR_CLAIM = (
+    r"2026|이천이십육|(?:2016|이천십육)\s*년?.{0,12}(?:아니|아냐|아닌|아닙|지났|아니에요)|"
+    r"(?:10|십)\s*년.{0,10}(?:지났|흘렀|지나|흐른)|(?:세월|시간)이.{0,8}(?:흘렀|지났)|"
+    r"지금은?.{0,6}(?:2016|이천십육).{0,4}(?:년이)?\s*아"
+)
 LOCATIONS = {
     "car_1": "1호차",
     "car_2": "2호차",
@@ -933,6 +939,16 @@ class GameEngine:
                     npc,
                     ["driver_accept"],
                 )
+            if f.get("report_read") and (
+                intent.get("claim") or (topic == "year" and re.search(YEAR_CLAIM, intent.get("quote", "")))
+            ):
+                # 플레이어가 '지금은 2016년이 아니다'라고 주장해야 보관함에서 증거를 낼 수 있다.
+                self.mark(s, "year_claimed", "기관사에게 지금은 2016년이 아니라고 주장했다.")
+                return self.result(
+                    "현재는 2016년입니다. 그래도 2016년이 아니라고 주장하신다면, 말씀만으로는 받아들일 수 없습니다. 지금이 몇 년인지 증명할 자료를 보여 주십시오. 가지고 계신 물건 중에서 골라 제출하십시오.",
+                    npc,
+                    ["driver_loop"],
+                )
             if topic in ("stop", "loop") and f.get("report_read"):
                 if topic == "stop":
                     line = "멈추는 것만으로는 해결되지 않습니다. 이 반복에서 벗어나려면 다음 역인 아지산역으로 가야 합니다. 그런데 그쪽 분기기가 잠겨 있습니다."
@@ -952,7 +968,7 @@ class GameEngine:
                     "기관사는 비밀번호가 현재 연도이며 2016 입력에 실패했고 한 번 남았다고 했다.",
                 )
                 return self.result(
-                    "아지산역은 위험 구간입니다. 무작정 향할 수는 없습니다. 분기기는 잠겨 있습니다. 비밀번호는 현재 연도입니다. 2016을 아무리 입력해도 열리지 않았습니다. 이제 한 번만 남았습니다. 지금이 다른 연도라는 말에는 증거가 필요합니다.",
+                    "아지산역은 위험 구간입니다. 무작정 향할 수는 없습니다. 분기기는 잠겨 있습니다. 비밀번호는 현재 연도입니다. 2016을 아무리 입력해도 열리지 않았습니다. 이제 한 번만 남았습니다. 그런데 당신은 지금이 몇 년이라고 생각하십니까?",
                     npc,
                     ["driver_lock"],
                 )
@@ -1031,6 +1047,10 @@ class GameEngine:
             )
         if s["flags"].get("year_proven"):
             return self.result("현재 연도에 관한 증거는 이미 확인받았다.")
+        if not s["flags"].get("year_claimed"):
+            return self.result(
+                "증거를 꺼내기 전에 먼저 기관사에게 지금이 2016년이 아니라고 말해야 한다."
+            )
         if item not in s["inventory"]:
             raise GameError(
                 "보유하지 않은 물건은 제출할 수 없습니다.", "not_owned", 403
@@ -1106,10 +1126,12 @@ class GameEngine:
             ):
                 raise GameError("증거 제출 조건이 바뀌었습니다.", "stale_state", 409)
             if c["item"] not in ("ticket_current", "newspaper"):
+                # 기관사가 직접 내쫓는 대사를 보여준 뒤 화면에서 엔딩 영상으로 넘어간다.
                 return self.bad(
                     s,
                     "wrong_evidence",
-                    "기관사는 자료를 밀어놓는다. “이것으로 현재 연도가 달라졌다고 할 수 없습니다. 지금 나가십시오.” 기관실 문이 닫히고 열차는 계속 달린다.",
+                    "이것으로는 지금이 2016년이 아니라고 할 수 없습니다. 더는 시간을 낭비할 수 없습니다. 지금 당장 기관실에서 나가십시오!",
+                    npc="driver",
                 )
             self.mark(
                 s,
@@ -1147,7 +1169,8 @@ class GameEngine:
                 return self.bad(
                     s,
                     "wrong_control",
-                    "입력 오류. 분기기 장치에 잠금 표시가 켜진다. 마지막 기회를 모두 사용했다. 열차는 반복되는 본선을 벗어나지 못한다.",
+                    "잠금 표시가 켜졌습니다… 마지막 기회였는데, 분기기가 완전히 잠겼습니다. 이제 이 열차는 반복에서 벗어날 수 없습니다. 지금 당장 기관실에서 나가십시오!",
+                    npc="driver",
                 )
             self.mark(
                 s, "route_open", "분기 선로가 열렸다. 열차가 아지산역에 자동 정차했다."
@@ -1161,12 +1184,16 @@ class GameEngine:
             )
         raise GameError("알 수 없는 최종 확인입니다.")
 
-    def bad(self, s, reason, text):
+    def bad(self, s, reason, text, npc=""):
         s["status"] = "bad"
         s["reason"] = reason
         s["confirmation"] = None
         s["pending_dialogue"] = ""
-        return self.result(text)
+        if npc:
+            s["npc"] = npc
+            # 증거 확인 전 기관사의 기본 표정으로 내쫓는다(놀란 표정은 증거를 인정할 때만).
+            s["expression"] = "neutral"
+        return self.result(text, npc, ui={"reaction": "neutral"} if npc else None)
 
     def hint(self, s):
         option = self._priority_option(s)
@@ -1289,6 +1316,11 @@ class GameEngine:
                     if not s.get("npc_turns", {}).get("driver")
                     else ask("operation", "기관사에게 운행 상황을 묻는다.", "driver", "help")
                 )
+            elif not f.get("year_claimed") and not f.get("year_proven"):
+                # 청소원에게 분실물 모양을 설명할 때처럼 플레이어가 직접 입력하게 한다.
+                progress = (action("claim_year", "기관사에게 지금이 몇 년인지 직접 말한다.", "compose")
+                            if s["npc"] == "driver"
+                            else action("talk_driver", "기관사에게 다시 말을 건다.", "select_npc", "driver"))
             elif not f.get("year_proven"):
                 progress = action("review_records", "현재 연도를 증명할 자료를 기관사에게 제시한다.", "inventory")
             else:
@@ -1336,7 +1368,8 @@ class GameEngine:
             if f.get("year_proven"):
                 return "control"
             if f.get("driver_explained"):
-                return "proof"
+                # '보관함에서 자료를 살펴본다'는 2016년이 아니라고 주장한 뒤에만 나온다.
+                return "proof" if f.get("year_claimed") else "claim"
         return stage
 
     def _scenario_options(self, s):
@@ -1495,9 +1528,10 @@ class GameEngine:
             # selection starts the longer authored dialogue through apply_action.
             return self.talk(s, dispatch["target"], "greeting", {"intent": "talk", "mode": "act"})
         if kind == "question":
-            return self.talk(s, dispatch["target"], dispatch["topic"], {"intent": "accept" if dispatch["accept"] else "talk", "mode": "act"})
+            return self.talk(s, dispatch["target"], dispatch["topic"], {"intent": "accept" if dispatch["accept"] else "talk", "mode": "act", "claim": bool(dispatch.get("claim"))})
         if kind == "compose":
-            return self.result("청소원이 말을 기다린다.", s["npc"], ui={"compose": True, "non_progress": True})
+            waiting = {"driver": "기관사가 당신의 대답을 기다린다."}.get(s["npc"], "청소원이 말을 기다린다.")
+            return self.result(waiting, s["npc"], ui={"compose": True, "non_progress": True})
         if kind == "inventory":
             return self.result("지니고 있는 물건과 기록을 펼쳐 본다.", ui={"inventory": True, "non_progress": True})
         if kind == "control":
@@ -1633,6 +1667,15 @@ class GameEngine:
         trip = self._answer_elder_trip_question(s, i)
         if trip:
             return trip
+        f = s["flags"]
+        if (s["npc"] == "driver" and s["location"] == "engine" and f.get("report_read")
+                and not f.get("year_proven") and not f.get("year_claimed")
+                and i.get("intent") in ("talk", "accept", "unknown", "impossible")
+                and i.get("mode") not in ("negated", "hypothesis", "reported")
+                and re.search(YEAR_CLAIM, i.get("quote", ""))):
+            # '지금은 2026년이에요' 같은 주장은 자유 대화나 비밀번호 질문으로 새지 않게 한다.
+            i = dict(i, intent="talk", target="driver", recipient="", topic="year", mode="act",
+                     dialogue_mode="scenario", dialogue_choice_id="")
         if (self._awaiting_anomaly(s) and i.get("mode") not in ("negated", "hypothesis", "reported")
                 and i.get("intent") in ("talk", "accept", "unknown", "describe", "impossible", "ambient")
                 and re.search(ANOMALY_OBSERVATION, i.get("quote", ""))):
@@ -1876,12 +1919,14 @@ class GameEngine:
             or (
                 loc == "engine"
                 and f.get("driver_explained")
+                and f.get("year_claimed")
                 and not f.get("year_proven")
             ),
             "controls": {
                 "door": loc == "car_4" and bool(f.get("mission_accepted")),
                 "proof": loc == "engine"
                 and bool(f.get("driver_explained"))
+                and bool(f.get("year_claimed"))
                 and not f.get("year_proven"),
                 "control": loc == "engine"
                 and bool(f.get("year_proven"))

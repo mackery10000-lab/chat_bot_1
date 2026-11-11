@@ -173,6 +173,8 @@ def _strict_route(runner):
     case.say("지금은 몇 년이라고 알고 계십니까?")
     case.check("2016" in case.data["reply"] and "2026" not in case.data["reply"],
                "driver believes 2016 before evidence")
+    case.say("지금은 2016년이 아니라 2026년입니다.")
+    case.check(bool(case.flags.get("year_claimed")), "claiming a later year unlocks evidence", fatal=True)
     case.action("prepare_evidence", "ticket_current")
     token = case.data["game"]["confirmation"]["token"]
     case.action("confirm", token=token)

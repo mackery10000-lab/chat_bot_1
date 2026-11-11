@@ -458,10 +458,24 @@
           "id": "password",
           "label": "비밀번호가 뭐죠?",
           "next": "proof",
-          "response": "현재 연도입니다. 2016을 여러 번 입력했지만 열리지 않았습니다. 이제 입력 기회는 한 번입니다. 판단을 바꾸려면 객관적인 증거가 필요합니다.",
+          "response": "현재 연도입니다. 2016을 여러 번 입력했지만 열리지 않았습니다. 이제 입력 기회는 한 번입니다. 그런데 당신은 지금이 몇 년이라고 생각하십니까?",
           "effect": {
             "type": "talk",
             "topic": "password"
+          }
+        }
+      ]
+    },
+    "claim": {
+      "choices": [
+        {
+          "id": "claim",
+          "label": "지금이 몇 년인지 직접 말한다.",
+          "next": "claim",
+          "response": "기관사가 당신의 대답을 기다린다.",
+          "narration": true,
+          "effect": {
+            "type": "compose"
           }
         }
       ]

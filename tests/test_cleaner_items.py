@@ -169,6 +169,7 @@ class CleanerItemsTest(GameTestCase):
                 self.a("present", "route_report", recipient="attendant")
                 self.a("move", "engine")
                 self.t("driver", "destination")
+                self.claim_year()
                 self.a("prepare_evidence", item)
                 self.assertEqual(self.data["game"]["status"], "playing")
                 self.assertEqual(self.data["game"]["confirmation"]["item"], item)
