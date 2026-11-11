@@ -15,9 +15,10 @@ const shell = document.querySelector('.chat-area');
 const overlay = $('overlay');
 const cinematic = $('cinematic');
 const cinematicVideo = $('cinematic-video');
+const openDialog=window.TrainUI.openDialog,closeDialog=window.TrainUI.closeDialog;
 let cinematicSession = 0, cinematicActive = false, cinematicLeaving = false;
 let cinematicNeedsSound = false, cinematicLastTime = 0, cinematicRestoringTime = false;
-let cinematicStallTimer = null;
+let cinematicStallTimer = null,cinematicProgressTimer=null;
 let resumeCinematic = null;
 const openingSeenKey = 'train.opening.seen';
 let state = null, scene = null, busy = false, lastRequest = null, toastTimer = null;
@@ -43,11 +44,13 @@ function prepareImage(src) {
 }
 async function prepareScene(data,force=false) {
   window.TrainLoading?.setReady();
+  // Completed results never wait for unrelated scene or portrait assets.
+  if(data.game.status!=='playing')return;
   const changed=force||!state||data.game.location.id!==state.location.id;
   const traveled=!!state&&data.game.location.id!==state.location.id;
   let movementReady=Promise.resolve();
   if(traveled){
-    if(overlay.open)overlay.close();
+    if(overlay.open)closeDialog(overlay);
     if(window.TrainLoading){window.TrainLoading.showMovement(data.game.location.name);movementReady=window.TrainLoading.waitForMovement();}
     else{showSceneLoading(true);movementReady=new Promise(resolve=>setTimeout(resolve,1000));}
   }else if(changed)showSceneLoading(true);
@@ -104,18 +107,18 @@ async function request(url, body = null) {
 async function perform(content,reuse=false) {
   if(busy||!state||cinematic.open)return null;clearError();$('reply-status').textContent='';
   let focusComposer=false;
-  const body=reuse?content:{...content,request_id:crypto.randomUUID?crypto.randomUUID():'turn_'+Date.now()+'_'+Math.random().toString(36).slice(2),revision:state.revision};
+  const body=reuse?content:{...content,request_id:window.crypto?.randomUUID?window.crypto.randomUUID():'turn_'+Date.now()+'_'+Math.random().toString(36).slice(2),revision:state.revision};
   // The server's actual location change starts the passage scene. This also
   // covers free-text movement, without flashing it for rejected travel requests.
   lastRequest=body;setBusy(true);
   try {
-    const data=await request('/api/chat',body);await prepareScene(data);apply(data,false,body);lastRequest=null;
-    if(body.action?.type==='present'&&overlay.open&&!data.ui?.inventory&&!data.ui?.document&&!data.game.confirmation)overlay.close();
+    const data=await request('/api/chat',body);await prepareScene(data);applyResponse(data,false,body);lastRequest=null;
+    if(body.action?.type==='present'&&overlay.open&&!data.ui?.inventory&&!data.ui?.document&&!data.game.confirmation)closeDialog(overlay);
     if(body.message){$('user-message').value='';$('user-message').style.height='auto';}
     focusComposer=!!data.ui?.compose&&state.status==='playing'&&!overlay.open;
     if(data.ui?.ignored)$('reply-status').textContent='장면에 반영되지 않은 입력입니다.';
     return data;
-  } catch(e) {setError(e.message,e.code!=='stale_state');if(e.code==='stale_state'){lastRequest=null;try{const data=await request('/api/game');await prepareScene(data);apply(data);}catch{}}return null;}
+  } catch(e) {setError(e.message,e.code!=='stale_state');if(e.code==='stale_state'){lastRequest=null;try{const data=await request('/api/game');await prepareScene(data);applyResponse(data);}catch{}}return null;}
   finally{showSceneLoading(false);setBusy(false);if(focusComposer)$('user-message').focus({preventScroll:true});}
 }
 const act=(type,extra={}) => perform({action:{type,...extra}});
@@ -127,13 +130,17 @@ function setDialogueVisible(visible) {
 function updateDialogue(data, interaction, previous) {
   const action=interaction?.action?.type;
   const reply=typeof data.reply==='string'?data.reply.trim():'';
-  const entry=state.history?.at(-1);
+  const entry=state.history&&state.history[state.history.length-1];
   // A saved conversation has no triggering action, but its last NPC reply still belongs on screen.
   const restoring=!interaction&&!!state.npc&&entry?.role==='npc'&&entry.npc===state.npc&&entry.text===data.reply;
   const traveled=previous&&previous.location.id!==state.location.id;
   const endedTalk=!state.npc&&reply.startsWith('대화를 마치고 주변으로 시선을 돌렸다.');
   const exploring=action==='look'||action==='end_talk'||action==='hint'||(action==='move'&&interaction.action.target===state.location.id);
-  if((!interaction&&!restoring)||data.ui?.ignored||!reply||traveled||endedTalk||exploring||state.status!=='playing') {
+  // 마지막 대사를 보여주는 동안 다른 갱신(저장 상태 재조회 등)이 대사창을 닫지 않게 한다.
+  if(endingTimer&&state.status!=='playing')return;
+  // 게임이 막 끝난 턴의 인물 대사(기관사가 내쫓는 말)는 엔딩 영상 전에 보여준다.
+  const finalWords=previous?.status==='playing'&&state.status!=='playing'&&!!state.npc;
+  if((!interaction&&!restoring)||data.ui?.ignored||!reply||traveled||endedTalk||exploring||(state.status!=='playing'&&!finalWords)) {
     setDialogueVisible(false);return;
   }
   const speaker=entry?.role!=='user'&&entry?.text===data.reply?entry.speaker:'차내';
@@ -151,6 +158,43 @@ function emphasizeTestimony(parent) {
     const parts=text.textContent.split(/(바랜\s*종이|구멍)/g);
     if(parts.length>1)text.replaceWith(...parts.map((part,index)=>index%2?node('strong','testimony-clue',part):part));
   });
+}
+const chatPeople={
+  explorer:{name:'탐험가',image:'portrait_01.png'},elder:{name:'노인',image:'portrait_02.png'},
+  cleaner:{name:'청소원',image:'portrait_03.png'},attendant:{name:'승무원',image:'portrait_04.png'},
+  driver:{name:'기관사',image:'portrait_05.png'}
+};
+function chatAvatar(npc){
+  const person=chatPeople[npc],avatar=node('span','chat-avatar npc-'+npc);
+  avatar.setAttribute('aria-hidden','true');
+  if(person)avatar.style.backgroundImage='url("/assets/images/'+person.image+'")';
+  return avatar;
+}
+function chatRow(entry){
+  const row=node('article','chat-row chat-'+entry.role);
+  const copy=node('div','chat-copy');
+  if(entry.role==='npc'&&chatPeople[entry.npc])row.append(chatAvatar(entry.npc));
+  if(entry.role!=='narrator')copy.append(node('strong','chat-speaker',entry.speaker||chatPeople[entry.npc]?.name||state.username));
+  const bubble=node('p','chat-bubble');bubble.append(...(entry.role==='npc'?dialogueParts(entry.text):[entry.text]));
+  if(entry.npc==='elder')emphasizeTestimony(bubble);
+  copy.append(bubble);
+  if(entry.record){const details=node('details','chat-record');details.append(node('summary','','대화에서 확인한 사실'),node('p','',entry.record));copy.append(details);}
+  row.append(copy);return row;
+}
+let transcriptKeys=[];
+function renderConversation(){
+  const list=$('conversation-history');
+  const entries=state.history||[],keys=entries.map(entry=>JSON.stringify(entry));
+  const append=transcriptKeys.length<=keys.length&&transcriptKeys.every((key,index)=>key===keys[index]);
+  const follow=!transcriptKeys.length||list.scrollHeight-list.scrollTop-list.clientHeight<64;
+  const count=append?transcriptKeys.length:0;
+  if(!append)list.replaceChildren();
+  const fragment=document.createDocumentFragment();entries.slice(count).forEach(entry=>fragment.append(chatRow(entry)));list.append(fragment);
+  if(keys.length!==transcriptKeys.length||!append){
+    if(follow)requestAnimationFrame(()=>{list.scrollTop=list.scrollHeight;$('latest-message').hidden=true;});
+    else $('latest-message').hidden=false;
+  }
+  transcriptKeys=keys;
 }
 // A character line may mix narration with quoted speech: “…” is spoken, the rest is narration.
 // Lines without quotes are spoken as a whole, and so are lines that only quote a word
@@ -230,8 +274,32 @@ function fitScene() {
     const width=Math.max(0,Math.min(viewport.clientWidth-borderWidth,(viewport.clientHeight-borderHeight)*aspect));
     const pixels=window.devicePixelRatio||1;
     shell.style.setProperty('--scene-width',(Math.floor(width*pixels)/pixels+borderWidth)+'px');
+    if(document.documentElement.classList.contains('no-aspect-ratio')){
+      $('scene-world').style.height=(Math.floor(width*pixels)/pixels/aspect)+'px';
+      fitMapCanvas();
+    }
+    // Center the right UI in the actual space beside the fitted scene. The
+    // left grid track can contain extra space when scene height limits its width.
+    const wide=matchMedia('(min-width:960px) and (min-aspect-ratio:5/4), (min-width:600px) and (min-aspect-ratio:8/5)').matches;
+    let shift=0;
+    if(wide){
+      const right=shell.getBoundingClientRect().right,padding=px(getComputedStyle(shell).paddingRight);
+      const railWidth=document.querySelector('.train-map-bar').offsetWidth;
+      shift=(frame.getBoundingClientRect().right-right+railWidth)/2+padding;
+    }
+    shell.style.setProperty('--console-shift',shift+'px');
     fitDialogueFont();
   });
+}
+function applyResponse(data,force=false,interaction=null){
+  try{apply(data,force,interaction);}
+  catch(error){
+    if(!data?.game||!['good','bad'].includes(data.game.status))throw error;
+    // Only the server decides the outcome; cosmetic errors cannot hide it.
+    state=data.game;scene=data.scene;clearTimeout(endingTimer);endingTimer=null;
+    releaseCinematic(false);showSceneLoading(false);document.body.classList.remove('game-booting');
+    showEndingComplete(state.status);
+  }
 }
 function apply(data, force = false, interaction = null) {
   if(!data?.game || !data?.scene) throw new Error('진행 상태 응답이 올바르지 않습니다.');
@@ -239,8 +307,10 @@ function apply(data, force = false, interaction = null) {
   const previous=state;
   state=data.game; scene=data.scene;
   shell.classList.toggle('conversation-active',!!state.npc&&state.status==='playing');
-  document.querySelector('.conversation-console').hidden=!state.npc||state.status!=='playing';
-  if(overlay.open&&overlay.dataset.view==='hint'&&interaction?.action?.type!=='hint')overlay.close();
+  const consolePanel=document.querySelector('.conversation-console');
+  consolePanel.hidden=state.status!=='playing';consolePanel.classList.toggle('history-only',!state.npc);
+  renderConversation();
+  if(overlay.open&&overlay.dataset.view==='hint'&&interaction?.action?.type!=='hint')closeDialog(overlay);
   noteOpenedLocations(previous);
   updateLocationNotice(previous);
   $('scene-world').style.aspectRatio=scene.aspect_ratio||'3 / 2';
@@ -261,7 +331,7 @@ function apply(data, force = false, interaction = null) {
   }else repair?.remove();
   $('darkness').hidden=scene.light_mode==='normal';$('darkness').classList.toggle('flashlight-mask',scene.light_mode==='flashlight');if(state.npc){$('darkness').style.setProperty('--beam-x','50%');$('darkness').style.setProperty('--beam-y','48%');}
   $('scene-world').dataset.mode=state.npc?'conversation':'exploration';
-  $('scene-caption').textContent=scene.dark?'불이 꺼져 아무것도 보이지 않는다.':state.status!=='playing'?'끝나지 않던 밤의 기록.':'';
+  $('scene-caption').textContent=scene.dark?'불이 꺼져 아무것도 보이지 않는다.':'';
   const layer=$('character-layer');layer.replaceChildren();
   const people=state.npc?scene.people.filter(p=>p.active):scene.people;
   people.forEach(p=>{
@@ -276,10 +346,17 @@ function apply(data, force = false, interaction = null) {
   $('interaction-guide').textContent=state.npc?'채팅으로 대화하세요. 대화를 마치려면 위의 ‘대화 마치기’를 누르세요.':'빛나는 지점에서 물건을 조사하거나 인물을 눌러 대화를 시작하세요.';
   updateDialogue(data,interaction,previous);renderGuidance(data,interaction);
   $('current-target').textContent=state.npc? (scene.people.find(p=>p.id===state.npc)?.name || '상대')+'에게 말하거나 주변에 행동하기':'현재 장면에 행동하기';
-  $('item-count').textContent=state.inventory.length; $('bag-btn').classList.toggle('bag-pulse',!!state.bag_hint);
+  $('item-count').textContent=state.inventory.length; $('bag-btn').classList.toggle('bag-pulse',!!state.bag_hint||!!state.testimony_hint);
+  $('bag-btn').classList.toggle('testimony-beacon',!!state.testimony_hint);
   renderLinearMap();renderSceneActions();
   acquisition((data.events||[]).filter(e=>e.type==='item_acquired'));
-  if(state.status!=='playing') openEnding();
+  if(state.status!=='playing'){
+    // 기관사가 내쫓는 대사처럼 실패 직후 인물 대사가 있으면, 대사를 먼저 보여준 뒤 엔딩 영상으로 넘어간다.
+    if(previous?.status==='playing'&&state.npc&&data.reply){
+      if(overlay.open){stopOverlayMedia();closeDialog(overlay);}
+      scheduleEnding(data.reply);
+    }else if(!endingTimer)openEnding();
+  }
   else if(state.confirmation) openConfirmation();
   else if(data.ui?.document) { selectedDocument=data.ui.document;documents.set(selectedDocument.id,selectedDocument);openInventory(selectedDocument); }
   else if(data.ui?.notice) openNotice();
@@ -362,67 +439,53 @@ function updateMapToggle(){
 function applyMapClosed(closed){
   const panel=$('train-map-panel');
   panel.classList.toggle('is-closed',closed);panel.inert=closed;panel.setAttribute('aria-hidden',String(closed));updateMapToggle();
+  panel.querySelectorAll('[data-location]').forEach(control=>{control.tabIndex=closed?-1:0;});
 }
 let mapRollSequence=0,mapMotion=null;
 const mapReducedMotion=matchMedia('(prefers-reduced-motion:reduce)');
-function settleMapRoll(){
+function settleMapRoll(completed=false){
   if(!mapMotion)return;
   const motion=mapMotion;mapMotion=null;mapRollSequence++;
-  motion.animations.forEach(animation=>animation.cancel());
-  document.querySelector('.train-map-bar').classList.remove('rolling');
-  delete document.querySelector('.train-map-bar').dataset.rollDirection;
-  $('train-map-panel').inert=mapClosed();
-  motion.resolve(false);
+  motion.cancel();
+  const bar=document.querySelector('.train-map-bar');
+  bar.classList.remove('rolling');delete bar.dataset.rollDirection;
+  $('train-map-panel').inert=mapClosed();motion.resolve(completed);
 }
 function rollMap(closed){
-  // Feed the unwarped paper behind the roller. Sampling before cancellation
-  // allows rapid reversals to continue from the exact visible paper length.
   const bar=document.querySelector('.train-map-bar'),panel=$('train-map-panel'),sheet=panel.querySelector('.train-map-sheet'),curl=bar.querySelector('.map-roll-edge');
-  const from=panel.getBoundingClientRect().height;
-  settleMapRoll();
-  applyMapClosed(closed);
-  const full=sheet.getBoundingClientRect().height,to=closed?0:full;
+  const oldFull=sheet.getBoundingClientRect().height;
+  const from=oldFull>0?Math.max(0,Math.min(1,panel.getBoundingClientRect().height/oldFull)):(mapClosed()?0:1);
+  settleMapRoll();applyMapClosed(closed);fitMapCanvas();
+  const to=closed?0:1,full=sheet.getBoundingClientRect().height;
   const still=document.documentElement.classList.contains('reduced-motion')||mapReducedMotion.matches;
-  if(still||full<1||Math.abs(from-to)<1)return Promise.resolve(true);
-  const sequence=++mapRollSequence;
-  const duration=Math.max(180,Math.round(720*Math.abs(from-to)/full));
-  const timing={duration,easing:'cubic-bezier(.4,.04,.24,1)'};
-  bar.classList.add('rolling');bar.dataset.rollDirection=closed?'closing':'opening';
-  panel.inert=true;
-  const animations=[
-    panel.animate({height:[from+'px',to+'px']},timing),
-    sheet.animate({transform:['translateY('+(from-full)+'px)','translateY('+(to-full)+'px)']},timing),
-    curl.animate([
-      {opacity:0,transform:'scaleY(.3)',backgroundPosition:'center,center '+(closed?'-90px':'0px')},
-      {opacity:1,transform:'scaleY(1)',offset:.14},
-      {opacity:1,transform:'scaleY(.82)',offset:.85},
-      {opacity:0,transform:'scaleY(.2)',backgroundPosition:'center,center '+(closed?'0px':'-90px')}
-    ],timing)
-  ];
-  let resolveMotion;
+  if(still||full<1||Math.abs(from-to)*full<1)return Promise.resolve(true);
+  const sequence=++mapRollSequence,duration=Math.max(180,Math.round(720*Math.abs(from-to))),start=performance.now();
+  let frame,timer,resolveMotion;
   const completion=new Promise(resolve=>{resolveMotion=resolve;});
-  mapMotion={animations,resolve:resolveMotion,promise:completion};
-  Promise.all(animations.map(animation=>animation.finished)).then(()=>{
-    if(sequence!==mapRollSequence)return;
-    mapMotion=null;bar.classList.remove('rolling');delete bar.dataset.rollDirection;
-    panel.inert=mapClosed();
-    animations.forEach(animation=>animation.cancel());resolveMotion(true);
-  }).catch(()=>{});
-  return completion;
+  const cleanup=()=>{
+    cancelAnimationFrame(frame);clearTimeout(timer);panel.style.height='';sheet.style.transform='';
+    curl.style.opacity='';curl.style.transform='';curl.style.backgroundPosition='';
+  };
+  mapMotion={cancel:cleanup,resolve:resolveMotion,promise:completion};
+  bar.classList.add('rolling');bar.dataset.rollDirection=closed?'closing':'opening';panel.inert=true;
+  const draw=t=>{
+    // Re-sample the natural paper size. Address-bar, keyboard, zoom and
+    // orientation changes must not cancel a half-finished paper feed.
+    const length=sheet.getBoundingClientRect().height,ease=t*t*(3-2*t),fraction=from+(to-from)*ease;
+    panel.style.height=(fraction*length)+'px';sheet.style.transform='translateY('+((fraction-1)*length)+'px)';
+    curl.style.opacity=String(Math.sin(Math.PI*t));curl.style.transform='scaleY('+(.3+.7*Math.sin(Math.PI*t))+')';
+    curl.style.backgroundPosition='center,center '+(-90*(closed?1-t:t))+'px';
+  };
+  const finish=()=>{if(sequence===mapRollSequence)settleMapRoll(true);};
+  const tick=now=>{if(sequence!==mapRollSequence)return;const t=Math.min(1,(now-start)/duration);draw(t);if(t<1)frame=requestAnimationFrame(tick);else finish();};
+  draw(0);frame=requestAnimationFrame(tick);
+  // A throttled/hidden webview may stop frames; always release the map lock.
+  timer=setTimeout(finish,duration+250);return completion;
 }
-// Scrollbar disappearance also fires visualViewport.resize in Chromium. Its
-// width-only change must not interrupt a fold; real resize, keyboard-height
-// and zoom changes settle to the sheet's new natural dimensions.
-const mapViewport=()=>({width:window.innerWidth,height:window.innerHeight,visualHeight:window.visualViewport?.height||window.innerHeight,scale:window.visualViewport?.scale||1});
-let mapViewportSize=mapViewport();
-function mapViewportChanged(){
-  const next=mapViewport(),previous=mapViewportSize;mapViewportSize=next;
-  if(next.width!==previous.width||next.height!==previous.height||Math.abs(next.visualHeight-previous.visualHeight)>.5||Math.abs(next.scale-previous.scale)>.001)settleMapRoll();
-}
-window.addEventListener('resize',mapViewportChanged);
-window.visualViewport?.addEventListener('resize',mapViewportChanged);
-mapReducedMotion.addEventListener('change',event=>{if(event.matches)settleMapRoll();});
+const onMapMotionChange=event=>{if(event.matches)settleMapRoll();};
+if(mapReducedMotion.addEventListener)mapReducedMotion.addEventListener('change',onMapMotionChange);else mapReducedMotion.addListener(onMapMotionChange);
 new MutationObserver(()=>{if(document.documentElement.classList.contains('reduced-motion'))settleMapRoll();}).observe(document.documentElement,{attributes:true,attributeFilter:['class']});
+window.addEventListener('pagehide',()=>settleMapRoll());
 function toggleMapByPlayer(){
   const closed=!mapClosed();
   rollMap(closed).then(finished=>{if(finished&&!closed)revealOpenedLocations();});
@@ -439,7 +502,7 @@ function noteOpenedLocations(previous){
   state.map.filter(p=>p.open&&!wasOpen.has(p.id)).forEach(p=>pendingOpened.add(p.id));
 }
 function revealOpenedLocations(){
-  if(mapRevealPending||!pendingOpened.size||state?.status!=='playing'||state.npc||overlay.open||cinematic.open)return;
+  if(mapRevealPending||!pendingOpened.size||state?.status!=='playing'||overlay.open||cinematic.open)return;
   // Unlock feedback starts only after the complete sheet is visible. Automatic
   // reveals never overwrite the player's saved open/closed preference.
   mapRevealPending=true;
@@ -450,7 +513,7 @@ function revealOpenedLocations(){
       if(!mapClosed())revealOpenedLocations();
       return;
     }
-    if(mapClosed()||state?.status!=='playing'||state.npc||overlay.open||cinematic.open)return;
+    if(mapClosed()||state?.status!=='playing'||overlay.open||cinematic.open)return;
     mapSparkle={ids:new Set(pendingOpened),start:performance.now()};pendingOpened.clear();renderLinearMap();
   });
 }
@@ -464,10 +527,10 @@ function renderLinearMap(){
   const stops=[...state.map].sort((a,b)=>order.indexOf(a.id)-order.indexOf(b.id));
   stops.forEach((p,index)=>{
     const status=p.current?'현재 위치':!p.open?'잠김':p.visited?'다녀온 곳':'이동 가능';
-    const b=button('',async()=>{if(overlay.open)overlay.close();await act('move',{target:p.id});},'linear-stop train-carriage'+(p.current?' current':p.visited?' visited':'')+(!p.open?' locked':''),true);
+    const b=button('',async()=>{if(overlay.open)closeDialog(overlay);await act('move',{target:p.id});},'linear-stop train-carriage'+(p.current?' current':p.visited?' visited':'')+(!p.open?' locked':''),true);
     const label=p.name;
     const description=p.id==='crew'?'승무원실 · 4호차와 기관실 사이':p.id==='engine'?'기관실 · 승무원실을 통해 연결':p.name;
-    b.dataset.location=p.id;b.setAttribute('aria-current',p.current?'location':'false');b.setAttribute('aria-label',p.open||p.current?description+' · '+status:'아직 열리지 않은 칸');
+    b.dataset.location=p.id;b.tabIndex=mapClosed()?-1:0;b.setAttribute('aria-current',p.current?'location':'false');b.setAttribute('aria-label',p.open||p.current?description+' · '+status:'아직 열리지 않은 칸');
     const [left,width]=sections[p.id]||[index*100/state.map.length,100/state.map.length];
     b.style.left=left+'%';b.style.width=width+'%';
     const sparkleAt=mapSparkle?.ids.has(p.id)&&p.open&&!p.current?performance.now()-mapSparkle.start:Infinity;
@@ -485,13 +548,23 @@ function renderLinearMap(){
     b.append(node('span','stop-name',label));
     if(!p.open||p.current||state.status!=='playing'){b.disabled=true;b.dataset.locked='1';}canvas.append(b);
   });
-  box.append(canvas);
+  // Only the six medallion patches use the edited artwork. All carriage pixels,
+  // including the existing unlit variants, keep their original source.
+  const landscape=node('img','train-map-icon-repair');landscape.src='/assets/images/ui/train-route-no-icons.png';
+  landscape.alt='';landscape.draggable=false;landscape.setAttribute('aria-hidden','true');canvas.append(landscape);
+  box.append(canvas);fitMapCanvas();
+}
+function fitMapCanvas(){
+  if(document.documentElement.classList.contains('no-aspect-ratio')){
+    const canvas=$('train-map').querySelector('.train-map-canvas');
+    if(canvas)canvas.style.height=(canvas.clientWidth/3)+'px';
+  }
 }
 function renderSceneActions(){
  const layer=$('scene-hotspots');layer.replaceChildren();
  if(state.status!=='playing')return;
  (scene.hotspots||[]).forEach(p=>{const interact=()=>{
-   if(p.kind==='focus'){if(p.target==='door')openLever();else if(p.target==='control'){if(state.controls.control)openControl();else if(state.controls.proof)openInventory();else toast('먼저 기관사에게 장치에 관해 물어보세요.');}}
+   if(p.kind==='focus'){if(p.target==='door')openLever();else if(p.target==='control'){if(state.controls.control)openControl();else if(state.controls.proof)openInventory();else toast('먼저 기관사와 장치, 그리고 지금이 몇 년인지에 관해 이야기해 보세요.');}}
    else act(p.kind,{target:p.target});
  };
  if(p.kind==='move'&&p.polygon){navigationHotspot(layer,p,interact);return;}
@@ -542,19 +615,21 @@ function openOverlay(title, view) {
   overlay.classList.toggle('ending-dialog',view==='ending-complete');
   overlay.classList.toggle('window-dialog',view==='window');
   overlay.classList.toggle('notice-dialog',view==='notice');
-  overlay.querySelector('.ending-card-art')?.remove();
+  overlay.querySelector('.ending-card-art')?.remove();overlay.querySelector('.ending-result')?.remove();
   $('overlay-title').textContent=title;$('overlay-body').replaceChildren();
-  if(!overlay.open)overlay.showModal();
+  if(!overlay.open)openDialog(overlay);
   placeAcquisition();return $('overlay-body');
 }
 function pendingReport(){return overlay.open&&overlay.dataset.view==='inventory'&&selectedDocument?.id==='route_report'&&state?.inventory.some(item=>item.id==='route_report'&&!item.read);}
-async function confirmReport(close=false){const data=await act('ack_document',{target:'route_report'});if(data&&close)overlay.close();return data;}
-function closeOverlay() { if(overlay.dataset.view==='ending-complete'||busy && (overlay.dataset.view==='confirm'||pendingReport())) return; if(pendingReport()){confirmReport(true);return;} if(overlay.dataset.view==='confirm' && state?.confirmation) { act('cancel').then(data=>{if(data) overlay.close();}); } else {stopOverlayMedia();overlay.close();} }
+async function confirmReport(close=false){const data=await act('ack_document',{target:'route_report'});if(data&&close)closeDialog(overlay);return data;}
+function closeOverlay() { if(overlay.dataset.view==='ending-complete'||busy && (overlay.dataset.view==='confirm'||pendingReport())) return; if(pendingReport()){confirmReport(true);return;} if(overlay.dataset.view==='confirm' && state?.confirmation) { act('cancel').then(data=>{if(data) closeDialog(overlay);}); } else {stopOverlayMedia();closeDialog(overlay);} }
 function paperAction(label, handler, art, cls = '', server = true) {
   const b=button('',handler,'paper-action '+cls,server);
   b.setAttribute('aria-label',label);
-  const image=node('img');image.src='/assets/images/inventory/actions/'+art+'.png';image.alt=label;image.draggable=false;
-  b.append(image);return b;
+  if(['previous','next','inventory-back'].includes(art)){
+    const image=node('img');image.src='/assets/images/inventory/actions/'+art+'.png';image.alt=label;image.draggable=false;b.append(image);
+  }else{b.classList.add('paper-action-text');b.append(node('span','',label));}
+  return b;
 }
 function inventoryPager(parent,index,count,onPage) {
   if(count<2)return;
@@ -571,6 +646,7 @@ function openInventory(doc = null, keepCatalogPage = false) {
   const body=openOverlay('보관함','inventory');
   overlay.dataset.inventoryMode=selected?'detail':'overview';
   if(!selected){
+    if(state.testimony_hint&&!keepCatalogPage){const index=state.inventory.findIndex(item=>item.id==='elder_testimony');if(index>=0)inventoryPage=Math.floor(index/(inventoryMobile.matches?6:8));}
     shownDocument=null;
     const book=node('section','inventory-overview');book.setAttribute('aria-label','낡은 수집품 기록장');
     book.append(node('h3','visually-hidden','INVENTORY · 소지품'));
@@ -579,12 +655,13 @@ function openInventory(doc = null, keepCatalogPage = false) {
     inventoryPage=Math.max(0,Math.min(inventoryPage,count-1));
     state.inventory.slice(inventoryPage*capacity,(inventoryPage+1)*capacity).forEach(item=>{
       const card=button('',()=>openItem(item.id),'inventory-card',true);card.dataset.itemId=item.id;
+      card.classList.toggle('testimony-hint',!!state.testimony_hint&&item.id==='elder_testimony');
       const mount=node('span','inventory-photo-mount');mount.append(inventoryArt(item));
       const frame=node('img','inventory-mount-art');frame.src='/assets/images/inventory/photo-mount.png';frame.alt='';frame.draggable=false;mount.append(frame);
       card.append(mount,node('strong','',item.name));grid.append(card);
     });
     if(!state.inventory.length)grid.append(node('p','inventory-empty','아직 모은 물건이 없습니다.'));
-    book.append(grid);inventoryPager(book,inventoryPage,count,index=>{inventoryPage=index;openInventory();});body.append(book);return;
+    book.append(grid);inventoryPager(book,inventoryPage,count,index=>{inventoryPage=index;openInventory(null,true);});body.append(book);return;
   }
   const book=node('div','inventory-detail'),catalog=node('aside','inventory-catalog');
   const back=paperAction('소지품 펼쳐 보기',async()=>{
@@ -598,6 +675,7 @@ function openInventory(doc = null, keepCatalogPage = false) {
   state.inventory.slice(catalogPage*capacity,(catalogPage+1)*capacity).forEach(item=>{
     const row=button('',()=>openItem(item.id),'item-row'+(selected.id===item.id?' selected':''),true);
     row.dataset.itemId=item.id;row.setAttribute('aria-current',selected.id===item.id?'true':'false');
+    row.classList.toggle('testimony-hint',!!state.testimony_hint&&item.id==='elder_testimony');
     const mount=node('span','inventory-list-mount');mount.append(inventoryArt(item));
     row.append(mount,node('span','',item.name));list.append(row);
   });
@@ -605,10 +683,12 @@ function openInventory(doc = null, keepCatalogPage = false) {
   inventoryPager(catalog,catalogPage,count,index=>{catalogPage=index;openInventory(selected,true);});
   const spread=node('div','inventory-spread'),object=node('figure','inventory-object'),page=node('article','book-page');
   const item=state.inventory.find(i=>i.id===selected.id);
+  object.classList.toggle('testimony-hint',!!state.testimony_hint&&selected.id==='elder_testimony');
   object.append(inventoryArt(item,'inventory-object-art'),node('figcaption','visually-hidden',item.name));
   renderDocument(page,selected);spread.append(object,page);book.append(catalog,spread);body.append(book);
 }
-inventoryMobile.addEventListener('change',()=>{if(overlay.open&&overlay.dataset.view==='inventory')openInventory(selectedDocument);});
+const onInventoryResize=()=>{if(overlay.open&&overlay.dataset.view==='inventory')openInventory(selectedDocument);};
+if(inventoryMobile.addEventListener)inventoryMobile.addEventListener('change',onInventoryResize);else inventoryMobile.addListener(onInventoryResize);
 async function openItem(id) {
   if(busy) return;
   if(pendingReport()&&id!=='route_report'&&!(await confirmReport()))return;
@@ -626,14 +706,18 @@ function renderDocument(page,doc) {
   const record=node('img','inventory-record-image');
   record.src=doc.artwork||'/assets/images/inventory/records/'+doc.id.replaceAll('_','-')+'.png';
   record.alt=[doc.title,...(doc.paragraphs||[]),...(doc.fields||[]).map(([key,value])=>key+': '+value)].join('\n');
-  record.draggable=false;page.append(record);
+  record.draggable=false;
+  if(doc.id==='elder_testimony'){
+    const text=node('section','testimony-record');text.append(node('h3','',doc.title));
+    (doc.paragraphs||[]).forEach(paragraph=>text.append(node('p','',paragraph)));emphasizeTestimony(text);page.append(text);
+  }else page.append(record);
   const actions=node('div','document-actions');
   if(state.status==='playing') {
     if(doc.id==='route_report'&&!state.inventory.find(item=>item.id==='route_report')?.read)actions.append(paperAction('보고서 내용 확인',()=>confirmReport(true),'confirm-report'));
-    if(doc.id==='flashlight' && state.location.id==='car_3' && scene?.light_mode==='dark')actions.append(paperAction('손전등 사용',async()=>{if(await act('use_item',{target:doc.id}))overlay.close();},'use-flashlight'));
+    if(doc.id==='flashlight' && state.location.id==='car_3' && scene?.light_mode==='dark')actions.append(paperAction('손전등 사용',async()=>{if(await act('use_item',{target:doc.id}))closeDialog(overlay);},'use-flashlight'));
     if(doc.id==='ticket_old' && state.location.id==='car_3') {
       const returned=state.inventory.find(i=>i.id==='ticket_old')?.name.includes('조사 기록');
-      actions.append(paperAction(returned?'노인에게 조사 기록 보여주기':'노인에게 원본 돌려드리기',()=>act('present',{target:'ticket_old',recipient:'elder'}),returned?'show-ticket-record':'return-ticket'));
+      actions.append(paperAction(returned?'노인에게 조사 기록 보여주기':'승차권 노인에게 돌려드리기',()=>act('present',{target:'ticket_old',recipient:'elder'}),returned?'show-ticket-record':'return-ticket'));
     }
     if(doc.id==='route_report' && state.location.id==='car_4')actions.append(paperAction('승무원에게 보고서 보여주기',()=>act('present',{target:'route_report',recipient:'attendant'}),'show-route-report'));
     if(state.controls.proof)actions.append(paperAction('이 물건을 최종 증거로 제출',()=>act('prepare_evidence',{target:doc.id}),'submit-evidence','danger-action'));
@@ -643,9 +727,9 @@ function renderDocument(page,doc) {
 }
 function openMap() {
   if(!state)return;const body=openOverlay('열차 안내도','map');const sheet=node('div','map-sheet');sheet.append(node('p','','방문한 장소로 돌아가 놓친 기록을 확인할 수 있습니다. 잠긴 구역은 조건을 충족해야 진입할 수 있습니다.'));
-  const grid=node('div','map-nodes');state.map.forEach(p=>{const b=button(p.name,async()=>{const d=await act('move',{target:p.id});if(d&&d.game.location.id===p.id)overlay.close();},'map-node'+(p.current?' current':''),true);if(!p.open||state.status!=='playing'){b.disabled=true;b.dataset.locked='1';}b.append(node('span','',p.current?'현재 위치':p.open?(p.visited?'방문한 장소':'이동 가능'):'아직 진입할 수 없음'));grid.append(b);});sheet.append(grid,node('p','map-foot','1호차 ↔ 2호차 ↔ 3호차 ↔ 4호차 ↔ 승무원실 ↔ 기관실'));body.append(sheet);
+  const grid=node('div','map-nodes');state.map.forEach(p=>{const b=button(p.name,async()=>{const d=await act('move',{target:p.id});if(d&&d.game.location.id===p.id)closeDialog(overlay);},'map-node'+(p.current?' current':''),true);if(!p.open||state.status!=='playing'){b.disabled=true;b.dataset.locked='1';}b.append(node('span','',p.current?'현재 위치':p.open?(p.visited?'방문한 장소':'이동 가능'):'아직 진입할 수 없음'));grid.append(b);});sheet.append(grid,node('p','map-foot','1호차 ↔ 2호차 ↔ 3호차 ↔ 4호차 ↔ 승무원실 ↔ 기관실'));body.append(sheet);
 }
-function openHistory() { if(!state)return;const body=openOverlay('대화 기록','history');const list=node('div','history-list');state.history.forEach(h=>{const r=node('article','history-row '+h.role);r.append(node('strong','',h.speaker),node('p','',h.text));if(h.record){const d=node('details');d.append(node('summary','','대화에서 확인한 사실'),node('p','',h.record));r.append(d);}if(h.npc==='elder')emphasizeTestimony(r);list.append(r);});body.append(list);list.lastElementChild?.scrollIntoView({block:'end'}); }
+function openHistory() { if(!state)return;const body=openOverlay('대화 기록','history');const list=node('div','history-list chat-transcript');list.setAttribute('aria-label','전체 대화 기록');list.tabIndex=0;state.history.forEach(entry=>list.append(chatRow(entry)));body.append(list);requestAnimationFrame(()=>{list.scrollTop=list.scrollHeight;}); }
 function openHint() {
   if(!activeHintChoice)return;
   const choice=activeHintChoice,body=openOverlay('조사 힌트','hint');
@@ -660,7 +744,7 @@ function puzzleHost(body) {
   body.append(host);return host;
 }
 function openLever() {
-  if(!state||state.location.id!=='car_4')return;
+  if(!state||state.location.id!=='car_4'||!state.controls.door)return;
   const existing=overlay.open&&overlay.dataset.view==='lever'&&$('overlay-body').querySelector('.puzzle-host');
   if(existing?.puzzle){existing.puzzle.update(state.door);return;}
   const body=openOverlay('승무원실 출입문','lever');
@@ -669,7 +753,7 @@ function openLever() {
     door:state.door,
     onOperate:target=>act('operate',{target}),
     onInventory:()=>openInventory(),
-    onEnter:async()=>{const data=await act('move',{target:'crew'});if(data?.game.location.id==='crew'){window.TrainAudio?.playEffect('door-clunk');overlay.close();}}
+    onEnter:async()=>{const data=await act('move',{target:'crew'});if(data?.game.location.id==='crew'){window.TrainAudio?.playEffect('door-clunk');closeDialog(overlay);}}
   }).setBusy(busy);
 }
 function openControl() {
@@ -686,8 +770,8 @@ function openConfirmation() {
   if(c.kind==='control'){const values=node('div','confirmation-values');values.append(node('span','','목적지: '+c.destination),node('span','','비밀번호: '+c.password));content.append(values);}
   if(c.kind==='evidence'){const values=node('div','confirmation-values',c.title);content.append(values);}
   const actions=node('div','modal-actions');
-  const cancel=button('취소하고 다시 살펴보기',async()=>{const d=await act('cancel');if(d){if(c.kind==='control')openControl();else overlay.close();}},'',true);
-  const confirm=button(c.kind==='abandon'?'탈출을 포기한다':'최종 확정',async()=>{const d=await act('confirm',{token:c.token});if(d&&d.game.status==='playing'&&!d.ui?.control)overlay.close();},'primary',true);
+  const cancel=button('취소하고 다시 살펴보기',async()=>{const d=await act('cancel');if(d){if(c.kind==='control')openControl();else closeDialog(overlay);}},'',true);
+  const confirm=button(c.kind==='abandon'?'탈출을 포기한다':'최종 확정',async()=>{const d=await act('confirm',{token:c.token});if(d&&d.game.status==='playing'&&!d.ui?.control)closeDialog(overlay);},'primary',true);
   for(const control of [cancel,confirm])control.setAttribute('aria-label',control.textContent);
   actions.append(cancel,confirm);content.append(actions);body.append(content);
 }
@@ -701,25 +785,31 @@ function lockMediaSession(locked) {
 function releaseCinematic(resumeMusic=true) {
   cinematicActive=false;cinematicSession++;resumeCinematic=null;cinematicNeedsSound=false;
   clearTimeout(cinematicStallTimer);cinematicStallTimer=null;
+  clearInterval(cinematicProgressTimer);cinematicProgressTimer=null;
   cinematic.dataset.phase='closed';lockMediaSession(false);
   cinematicVideo.onended=null;cinematicVideo.onerror=null;cinematicVideo.ontimeupdate=null;
+  cinematicVideo.onplaying=null;cinematicVideo.onwaiting=null;
   cinematicVideo.pause();cinematicVideo.removeAttribute('src');cinematicVideo.load();
-  if(cinematic.open)cinematic.close();
+  if(cinematic.open)closeDialog(cinematic);
   if(resumeMusic)window.TrainAudio?.setSuspended(false);
 }
 function showEndingComplete(kind) {
   const good=kind==='good';
+  overlay.classList.remove('ending-art-failed');
   overlay.dataset.ending=good?'good':'bad';
   const body=openOverlay(good?'긴 밤의 끝':'영원한 승객','ending-complete');
   const art=node('img','ending-card-art');art.src='/assets/images/ui/ending-certificate'+(good?'':'-sad')+'.png';
-  art.alt='';art.draggable=false;art.setAttribute('aria-hidden','true');overlay.prepend(art);
+  art.alt='';art.draggable=false;art.setAttribute('aria-hidden','true');
+  art.onerror=()=>{if(art.isConnected){art.hidden=true;overlay.classList.add('ending-art-failed');}};overlay.prepend(art);
+  // 결과가 한눈에 보이도록 제목 위에 성공·실패를 크게 표시한다.
+  $('overlay-title').before(node('p','ending-result',good?'탈출 성공':'탈출 실패'));
   const content=node('section','ending-complete');
-  content.append(node('p','',good?'당신의 조사가 끝났습니다.':'열차의 밤은 계속됩니다.'));
+  content.append(node('p','',good?'당신은 끝없는 열차에서 벗어나 현실로 돌아왔습니다.':'열차를 벗어나지 못했습니다. 열차의 밤은 계속됩니다.'));
   const restart=button('처음부터 다시 시작',()=>startNewGame(),'brass-button');restart.id='ending-restart';
   content.append(restart);body.append(content);
 }
 function openCinematic(kind,src) {
-  if(overlay.open){stopOverlayMedia();overlay.close();}
+  if(overlay.open){stopOverlayMedia();closeDialog(overlay);}
   acquisitionQueue=[];dismissAcquisition();
   const opening=kind==='opening',session=++cinematicSession;
   cinematicActive=true;cinematicLeaving=false;cinematicNeedsSound=false;
@@ -729,12 +819,15 @@ function openCinematic(kind,src) {
   $('cinematic-status').textContent='영상을 불러오는 중…';
   cinematicVideo.controls=false;cinematicVideo.muted=false;cinematicVideo.playbackRate=1;
   window.TrainAudio?.setSuspended(true);
-  let resolveCompleted,rejectCompleted;
-  const completed=new Promise((resolve,reject)=>{resolveCompleted=resolve;rejectCompleted=reject;});
+  let resolveCompleted;
+  const completed=new Promise(resolve=>{resolveCompleted=resolve;});
   const current=()=>cinematicActive&&session===cinematicSession;
   const fail=()=>{
     if(!current())return;
-    releaseCinematic();rejectCompleted(new Error('영상을 불러오지 못했습니다. 기록 불러오기로 다시 시도해 주세요.'));
+    // Media support must never hide a completed game's result or block entry.
+    if(opening){try{sessionStorage.setItem(openingSeenKey,'1');}catch{}releaseCinematic();}
+    else{releaseCinematic(false);showEndingComplete(kind);}
+    resolveCompleted();
   };
   const watchProgress=()=>{
     clearTimeout(cinematicStallTimer);
@@ -755,13 +848,13 @@ function openCinematic(kind,src) {
       }else fail();
     }finally{
       playPending=false;
-      if(current()&&!cinematicLeaving&&!document.hidden&&cinematicVideo.paused&&!cinematicVideo.ended&&!cinematicVideo.error)setTimeout(play,0);
+      if(current()&&!cinematicLeaving&&!document.hidden&&cinematicVideo.paused&&!cinematicVideo.ended&&!cinematicVideo.error)setTimeout(play,250);
     }
   };
   resumeCinematic=play;lockMediaSession(true);
   cinematicVideo.onplaying=()=>{$('cinematic-status').textContent='';watchProgress();};
   cinematicVideo.onwaiting=()=>{$('cinematic-status').textContent='영상을 불러오는 중…';};
-  cinematicVideo.ontimeupdate=()=>{if(current()&&!cinematicVideo.seeking&&cinematicVideo.currentTime>lastProgress){lastProgress=cinematicVideo.currentTime;watchProgress();}};
+  cinematicVideo.ontimeupdate=()=>{if(current()&&!cinematicVideo.seeking&&cinematicVideo.currentTime>lastProgress){lastProgress=cinematicVideo.currentTime;watchProgress();if(Number.isFinite(cinematicVideo.duration)&&cinematicVideo.duration>0&&cinematicVideo.duration-cinematicVideo.currentTime<.08)finish();}};
   const finish=()=>{
     if(!current())return;
     if(opening){
@@ -776,7 +869,13 @@ function openCinematic(kind,src) {
   $('cinematic-skip').hidden=!opening;
   $('cinematic-skip').onclick=opening?finish:null;
   cinematicVideo.src=src;cinematicVideo.setAttribute('aria-label',$('cinematic-title').textContent+' 영상');
-  if(!cinematic.open)cinematic.showModal();
+  if(!cinematic.open)openDialog(cinematic);
+  cinematicProgressTimer=setInterval(()=>{
+    if(!current())return;
+    if(cinematicVideo.error){fail();return;}
+    if(cinematicVideo.ended||(Number.isFinite(cinematicVideo.duration)&&cinematicVideo.duration>0&&cinematicVideo.currentTime>=cinematicVideo.duration-.08)){finish();return;}
+    if(!document.hidden&&cinematicVideo.currentTime>lastProgress){lastProgress=cinematicVideo.currentTime;watchProgress();}
+  },250);
   showSceneLoading(false);watchProgress();play();
   return completed;
 }
@@ -812,10 +911,21 @@ cinematicVideo.addEventListener('ratechange',()=>{if(cinematicActive&&cinematicV
 window.addEventListener('pagehide',()=>{cinematicLeaving=true;cinematicVideo.pause();});
 window.addEventListener('pageshow',()=>{cinematicLeaving=false;if(cinematicActive)resumeCinematic?.();});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&cinematicActive)resumeCinematic?.();});
+let endingTimer=null;
+function scheduleEnding(text) {
+  clearTimeout(endingTimer);
+  const box=$('dialogue-box');
+  const go=()=>{clearTimeout(endingTimer);endingTimer=null;box.removeEventListener('click',go);openEnding();};
+  // 읽을 시간을 주되 너무 오래 붙잡지 않는다. 대사창을 누르면 바로 넘어간다.
+  endingTimer=setTimeout(go,Math.min(9000,2500+String(text).length*55));
+  box.addEventListener('click',go);
+}
 function openEnding() {
-  if(!state?.ending_video)return;
+  if(!state||state.status==='playing'||(overlay.open&&overlay.dataset.view==='ending-complete'))return;
+  if(!state.ending_video){showEndingComplete(state.status);return;}
   if(cinematic.open&&cinematic.dataset.kind===state.ending_video.kind)return;
-  openCinematic(state.ending_video.kind,state.ending_video.src).catch(error=>setError(error.message,false));
+  const fallback=()=>{releaseCinematic(false);showEndingComplete(state.status);};
+  try{openCinematic(state.ending_video.kind,state.ending_video.src).catch(fallback);}catch{fallback();}
 }
 async function beginGame(data,newGame=false) {
   let openingSeen=false;
@@ -823,7 +933,7 @@ async function beginGame(data,newGame=false) {
   const needsOpening=data.game.status==='playing'&&data.game.location.id==='car_1'&&data.game.revision===0&&!openingSeen;
   if(needsOpening){document.body.classList.add('game-booting');await openCinematic('opening','/assets/videos/opening.mp4');}
   showSceneLoading(true);
-  await prepareScene(data,true);apply(data,true);
+  await prepareScene(data,true);applyResponse(data,true);
   document.body.classList.remove('game-booting');
 }
 function openSettings() {
@@ -842,7 +952,7 @@ function openSettings() {
   list.append(l,node('p','','진행은 현재 브라우저에 연결된 기록으로 자동 보관됩니다. 잠시 쉬려면 창을 닫고 다시 이어서 조사할 수 있습니다.'),button('조사 기록 보기',openJournal),button('새로운 조사 시작',confirmNewGame));
   if(state?.status==='playing')list.append(button('탈출 포기 여부 선택',()=>act('abandon'),'',true));body.append(list);
 }
-function confirmNewGame() {if(busy)return;const body=openOverlay('새로운 조사 시작','newgame');const c=node('div','modal-content');c.append(node('p','','진행을 초기화하고 처음 화면으로 돌아갑니다. 승객 이름을 다시 정하고 새 승차권을 발권할 수 있습니다. 새로 시작할까요?'));const actions=node('div','modal-actions');actions.append(button('이어서 조사하기',()=>overlay.close()),button('새 게임 시작',()=>startNewGame(),'primary'));c.append(actions);body.append(c);}
+function confirmNewGame() {if(busy)return;const body=openOverlay('새로운 조사 시작','newgame');const c=node('div','modal-content');c.append(node('p','','진행을 초기화하고 처음 화면으로 돌아갑니다. 승객 이름을 다시 정하고 새 승차권을 발권할 수 있습니다. 새로 시작할까요?'));const actions=node('div','modal-actions');actions.append(button('이어서 조사하기',()=>closeDialog(overlay)),button('새 게임 시작',()=>startNewGame(),'primary'));c.append(actions);body.append(c);}
 async function startNewGame() {
   if(busy)return;
   showSceneLoading(true);setBusy(true);clearError();let leaving=false;
@@ -856,19 +966,22 @@ async function startNewGame() {
   }catch(e){setError(e.message,false);}
   finally{if(!leaving){showSceneLoading(false);setBusy(false);}}
 }
-async function sendText(message) { if(overlay.open)overlay.close();$('user-message').value=message;return perform({message}); }
+async function sendText(message) { if(overlay.open)closeDialog(overlay);$('user-message').value=message;return perform({message}); }
 $('chat-form').addEventListener('submit',e=>{e.preventDefault();if(!state?.npc||state.status!=='playing')return;const message=$('user-message').value.trim();if(message)perform({message});});
-$('user-message').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();$('chat-form').requestSubmit();}});
+$('user-message').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();window.TrainUI.submitForm($('chat-form'));}});
 $('user-message').addEventListener('input',e=>{e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,100)+'px';});
 $('close-dialogue').addEventListener('click',()=>{setDialogueVisible(false);(document.querySelector('.person-hotspot.talking')||$('hint-btn')).focus({preventScroll:true});});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!e.isComposing&&!overlay.open&&!$('dialogue-box').hidden){e.preventDefault();setDialogueVisible(false);}});
 $('menu-btn').addEventListener('click',openSettings);
 $('map-toggle').addEventListener('click',toggleMapByPlayer);
+$('train-map-panel').addEventListener('click',event=>{if(mapMotion||mapClosed()){event.preventDefault();event.stopImmediatePropagation();}},true);
+$('latest-message').addEventListener('click',()=>{$('conversation-history').scrollTop=$('conversation-history').scrollHeight;$('latest-message').hidden=true;});
+$('conversation-history').addEventListener('scroll',event=>{const list=event.currentTarget;if(list.scrollHeight-list.scrollTop-list.clientHeight<64)$('latest-message').hidden=true;},{passive:true});
 overlay.addEventListener('close',revealOpenedLocations);
 try{if(localStorage.getItem('train_map_closed')==='true')applyMapClosed(true);}catch{}
 $('hint-choice').addEventListener('click',()=>{if(activeHintChoice)perform({action:{...activeHintChoice.action}});});
 $('bag-btn').addEventListener('click',()=>openInventory());$('end-talk').addEventListener('click',()=>act('end_talk'));$('history-btn').addEventListener('click',openHistory);$('hint-btn').addEventListener('click',()=>act('hint'));$('close-overlay').addEventListener('click',closeOverlay);overlay.addEventListener('close',stopOverlayMedia);overlay.addEventListener('cancel',e=>{e.preventDefault();closeOverlay();});
-$('retry-btn').addEventListener('click',()=>{if(lastRequest)perform(lastRequest,true);});$('reload-btn').addEventListener('click',async()=>{if(busy)return;setBusy(true);try{const data=await request('/api/game');if(state){await prepareScene(data);apply(data);}else await beginGame(data);clearError();toast('진행 기록을 불러왔습니다.');}catch(e){document.body.classList.remove('game-booting');setError(e.message,false);}finally{showSceneLoading(false);setBusy(false);}});
+$('retry-btn').addEventListener('click',()=>{if(lastRequest)perform(lastRequest,true);});$('reload-btn').addEventListener('click',async()=>{if(busy)return;setBusy(true);try{const data=await request('/api/game');if(state){await prepareScene(data);applyResponse(data);}else await beginGame(data);clearError();toast('진행 기록을 불러왔습니다.');}catch(e){document.body.classList.remove('game-booting');setError(e.message,false);}finally{showSceneLoading(false);setBusy(false);}});
 $('scene-world').addEventListener('pointermove',e=>{if(scene?.light_mode!=='flashlight'||state?.npc)return;const r=e.currentTarget.getBoundingClientRect();$('darkness').style.setProperty('--beam-x',((e.clientX-r.left)/r.width*100)+'%');$('darkness').style.setProperty('--beam-y',((e.clientY-r.top)/r.height*100)+'%');});
 try{if(localStorage.getItem('train_reduced_motion')==='true')document.documentElement.classList.add('reduced-motion');}catch{}
 window.addEventListener('resize',fitScene);

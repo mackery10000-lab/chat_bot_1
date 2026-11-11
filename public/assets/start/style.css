@@ -23,27 +23,6 @@
   font-display: swap;
 }
 
-@font-face {
-  font-family: 'TrainKorean';
-  src: url('../css/NanumGothic.ttf') format('truetype');
-  font-weight: 400;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'TrainKorean';
-  src: url('../css/NanumGothicBold.ttf') format('truetype');
-  font-weight: 700;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'TrainStory';
-  src: url('../css/NanumMyeongjo-ExtraBold.ttf') format('truetype');
-  font-weight: 800;
-  font-display: swap;
-}
-
 :root {
   /* 배경 */
   --void: #0B0907;
@@ -83,14 +62,15 @@
   --ink-soft: #6B5434;
 
   /* 글꼴 */
-  --font-ui: 'TrainKorean', 'Malgun Gothic', sans-serif;            /* 일반 글꼴 */
-  --font-story: 'TrainStory', 'Batang', serif;                     /* 나레이션·이야기 글 */
+  --font-ui: 'OgRenaissanceSecret', 'Noto Sans KR', sans-serif;      /* 일반 글꼴 */
+  --font-story: 'OgRenaissanceSecret', 'Song Myung', serif;          /* 나레이션·이야기 글 */
   --font-title: 'Cinzel', 'Song Myung', serif;                       /* 간판 글꼴: 처음 영어에 쓰던 Cinzel (한글은 송명체로) */
   --font-serif-ko: 'Song Myung', serif;
   --font-serif-en: 'Cinzel', serif;
   --font-dot: 'DotGothic16', 'Noto Sans KR', sans-serif;
   /* 궁서체: Windows·macOS 기본 글꼴. 없는 기기(안드로이드 등)에선 송명체로 대체 */
   --font-gungsuh: 'Gungsuh', '궁서', 'GungSeo', '궁서체', 'Song Myung', serif;
+  --renaissance-stroke: .03em;
 }
 
 * { box-sizing: border-box; }
@@ -100,6 +80,8 @@ body {
   background: var(--void);
   color: var(--text);
   font-family: var(--font-ui);
+  /* 르네상스체는 굵기가 하나뿐이라 윤곽선으로 두껍게 한다. 다른 글꼴 규칙은 0으로 되돌린다. */
+  -webkit-text-stroke-width: var(--renaissance-stroke);
 }
 
 .sr-only {
@@ -275,6 +257,7 @@ body {
   letter-spacing: 0.04em;
   color: var(--text-title);
   text-shadow: 0 2px 0 #000, 0 0 30px rgba(0, 0, 0, 0.9), 0 0 60px rgba(255, 170, 80, 0.08);
+  -webkit-text-stroke-width:0;
 }
 
 .title__shake {
@@ -289,6 +272,7 @@ body {
   font: 400 15px var(--font-dot);
   letter-spacing: 0.45em;
   color: var(--text-mute);
+  -webkit-text-stroke-width:0;
 }
 
 /* ---------- 철도역 간판 ---------- */
@@ -431,6 +415,7 @@ body {
   font: 600 13px var(--font-serif-en);
   letter-spacing: 0.3em;
   color: #B09254;
+  -webkit-text-stroke-width:0;
 }
 
 .sign__strip {
@@ -457,6 +442,7 @@ body {
     0 0 24px #FF2A1F,
     0 0 40px rgba(255, 40, 30, 0.6);
   animation: flicker 3s infinite;
+  -webkit-text-stroke-width:0;
 }
 
 /* 흐르는 흰 글씨 */
@@ -467,6 +453,7 @@ body {
   white-space: nowrap;
   font: 400 16px var(--font-title);
   letter-spacing: 0.04em;
+  -webkit-text-stroke-width:0;
 }
 
 .ticker__track {
@@ -482,7 +469,7 @@ body {
   margin: 0;
   min-height: 70px;
   text-align: center;
-  font: 800 18px/1.9 var(--font-story);
+  font: 400 18px/1.9 var(--font-story);
   letter-spacing: 0.02em;
   color: var(--text-dim);
 }
@@ -593,6 +580,7 @@ body {
   border-right: 2px dashed rgba(110, 80, 40, 0.55);
   font: 400 11px var(--font-dot);
   color: #6B5434;
+  -webkit-text-stroke-width:0;
 }
 
 /* 검표 펀치 구멍 */
@@ -617,7 +605,7 @@ body {
 .ticket__body svg { margin-left: auto; }
 
 .ticket__text { display: flex; flex-direction: column; gap: 3px; }
-.ticket__label { font: 600 10px var(--font-serif-en); letter-spacing: 0.24em; color: #6B5434; }
+.ticket__label { font: 600 10px var(--font-serif-en); letter-spacing: 0.24em; color: #6B5434;-webkit-text-stroke-width:0}
 .ticket__title { font: 900 24px/1.15 var(--font-ui); letter-spacing: 0.08em; }
 .ticket__desc { font: 500 12.5px/1.3 var(--font-ui); color: #5E4A2E; }
 
@@ -634,6 +622,7 @@ body {
   color: rgba(168, 44, 44, 0.7);
   text-align: center;
   letter-spacing: 0.08em;
+  -webkit-text-stroke-width:0;
 }
 
 /* 키보드 포커스 */
@@ -667,6 +656,7 @@ body {
   font: 600 12px var(--font-serif-en);
   letter-spacing: 0.36em;
   color: var(--gold-dim);
+  -webkit-text-stroke-width:0;
 }
 .register-head__title {
   margin: 0;
@@ -674,10 +664,11 @@ body {
   letter-spacing: 0.06em;
   color: var(--text-title);
   text-shadow: 0 2px 0 #000, 0 0 30px rgba(0, 0, 0, 0.9);
+  -webkit-text-stroke-width:0;
 }
 .register-head__desc {
   margin: 0;
-  font: 800 16px/1.8 var(--font-story);
+  font: 400 16px/1.8 var(--font-story);
   color: var(--text-dim);
 }
 
@@ -707,8 +698,8 @@ body {
   padding-bottom: 10px;
   border-bottom: 2px solid rgba(90, 60, 25, 0.55);
 }
-.ledger__line { font: 700 15px var(--font-serif-en); letter-spacing: 0.16em; color: #5A1A1A; }
-.ledger__car { font: 400 13px var(--font-dot); color: #6B5434; }
+.ledger__line { font: 700 15px var(--font-serif-en); letter-spacing: 0.16em; color: #5A1A1A;-webkit-text-stroke-width:0}
+.ledger__car { font: 400 13px var(--font-dot); color: #6B5434;-webkit-text-stroke-width:0}
 
 .ledger__table { width: 100%; border-collapse: collapse; }
 .ledger__table th {
@@ -717,6 +708,7 @@ body {
   font: 600 11px var(--font-serif-en);
   letter-spacing: 0.14em;
   color: #6B5434;
+  -webkit-text-stroke-width:0;
 }
 .ledger__table .col-no { width: 70px; }
 .ledger__table .col-date { width: 90px; }
@@ -726,9 +718,10 @@ body {
   border-top: 1px solid rgba(90, 60, 25, 0.35);
   font: 400 17px var(--font-serif-ko);
   color: #4A3820;
+  -webkit-text-stroke-width:0;
 }
 .ledger__table td.mono,
-.mono { font: 400 13px var(--font-dot); color: #6B5434; }
+.mono { font: 400 13px var(--font-dot); color: #6B5434;-webkit-text-stroke-width:0}
 .ledger__table td.off { color: #8E2A2A; }
 
 /* 잉크가 번져 사라질 듯한 이름 */
@@ -760,6 +753,7 @@ body {
   font: 400 28px var(--font-serif-ko);
   letter-spacing: 0.08em;
   color: #2A1F14;
+  -webkit-text-stroke-width:0;
 }
 .entry__input::placeholder { color: #8C7556; opacity: 1; }
 .entry__input:focus {
@@ -789,7 +783,7 @@ body {
   margin: 0;
   min-height: 58px;
   text-align: center;
-  font: 800 17px/1.8 var(--font-story);
+  font: 400 17px/1.8 var(--font-story);
   color: var(--text-dim);
 }
 .register-msg__name { color: var(--text-title); }
@@ -886,8 +880,8 @@ body {
 
 .settings__head { display: flex; align-items: flex-start; gap: 12px; }
 .settings__titles { display: flex; flex-direction: column; gap: 2px; }
-.settings__en { font: 600 10px var(--font-serif-en); letter-spacing: 0.3em; color: #6B5434; }
-.settings__title { margin: 0; font: 400 26px/1.2 var(--font-serif-ko); color: var(--ink); }
+.settings__en { font: 600 10px var(--font-serif-en); letter-spacing: 0.3em; color: #6B5434;-webkit-text-stroke-width:0}
+.settings__title { margin: 0; font: 400 26px/1.2 var(--font-serif-ko); color: var(--ink);-webkit-text-stroke-width:0}
 .settings__close {
   margin-left: auto;
   width: 44px;
@@ -909,7 +903,7 @@ body {
 .settings__row { display: flex; flex-direction: column; gap: 6px; }
 .settings__row--inline { flex-direction: row; align-items: center; gap: 12px; }
 .settings__label-line { display: flex; align-items: baseline; font: 700 14px var(--font-ui); }
-.settings__label-line output { margin-left: auto; font: 400 13px var(--font-dot); color: #5E4A2E; }
+.settings__label-line output { margin-left: auto; font: 400 13px var(--font-dot); color: #5E4A2E;-webkit-text-stroke-width:0}
 .settings__label { font: 700 14px var(--font-ui); }
 .settings__hint { font: 400 12px var(--font-ui); color: #5E4A2E; }
 
@@ -1138,7 +1132,7 @@ body {
   background: linear-gradient(180deg, #2A1D10, #1A120A);
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.8), 0 1px 0 rgba(255, 230, 170, 0.35);
 }
-.booth__label { font: 600 10px var(--font-serif-en); letter-spacing: 0.32em; color: #C9A464; }
+.booth__label { font: 600 10px var(--font-serif-en); letter-spacing: 0.32em; color: #C9A464;-webkit-text-stroke-width:0}
 .booth__lamp {
   width: 8px; height: 8px; border-radius: 50%;
   background: #4A1410;
@@ -1219,10 +1213,10 @@ body {
 }
 
 .pass__top { display: flex; align-items: center; justify-content: center; gap: 12px; padding-bottom: 10px; border-bottom: 1px solid rgba(74, 40, 20, 0.4); }
-.pass__brand { font: 600 12px var(--font-serif-en); letter-spacing: 0.4em; padding-left: 0.4em; }
+.pass__brand { font: 600 12px var(--font-serif-en); letter-spacing: 0.4em; padding-left: 0.4em;-webkit-text-stroke-width:0}
 .pass__dot { font-size: 7px; }
 .pass__no { margin-left: auto; font: 400 11px var(--font-ui); color: var(--brown-soft); }
-.mono-ink { font-family: var(--font-dot); letter-spacing: 0.04em; }
+.mono-ink { font-family: var(--font-dot); letter-spacing: 0.04em;-webkit-text-stroke-width:0}
 
 .pass__grid {
   display: grid;
@@ -1234,7 +1228,7 @@ body {
 .pass__cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .pass__cell + .pass__cell:not(:nth-child(4)) { border-left: 1px solid rgba(74, 40, 20, 0.3); padding-left: 12px; }
 .pass__k { font: 400 11px var(--font-ui); color: var(--brown-soft); letter-spacing: 0.06em; }
-.pass__v { font: 700 17px/1.2 'Libre Baskerville', var(--font-serif-ko); }
+.pass__v { font: 700 17px/1.2 'Libre Baskerville', var(--font-serif-ko);-webkit-text-stroke-width:0}
 .pass__v--big { font-size: 22px; }
 .pass__arrow { justify-content: center; align-items: center; font-size: 26px; border-left: 0 !important; padding-left: 0 !important; }
 /* 도착역: 잉크 얼룩 */
@@ -1263,6 +1257,7 @@ body {
   font: 700 28px/1.2 var(--font-serif-ko);
   letter-spacing: 0.08em;
   outline: none;
+  -webkit-text-stroke-width:0;
 }
 .pass__input::placeholder { color: rgba(122, 86, 54, 0.55); font-size: 18px; font-weight: 400; letter-spacing: 0.04em; }
 .pass__input:focus { border-bottom-color: #7A1F1A; background: rgba(255, 248, 228, 0.35); }
@@ -1289,8 +1284,9 @@ body {
   opacity: 0;
   transform: rotate(-14deg) scale(1.8);
   pointer-events: none;
+  -webkit-text-stroke-width:0;
 }
-.pass__stamp small { display: block; font: 400 10px var(--font-dot); letter-spacing: 0.05em; }
+.pass__stamp small { display: block; font: 400 10px var(--font-dot); letter-spacing: 0.05em;-webkit-text-stroke-width:0}
 
 /* 발권 진행: 도장 쾅 → 표가 아래로 빠져나감 */
 .booth.is-printing .pass__stamp { animation: stampIn 0.35s cubic-bezier(.4, 0, .6, 1.4) 0.15s forwards; }

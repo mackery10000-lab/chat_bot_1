@@ -38,6 +38,7 @@
       if(shell){if(previousShellInert===null)previousShellInert=shell.inert;shell.inert=true;}
       if(destination)destination.textContent=name?name+'로 이동합니다.':'';
       screen.dataset.mode='movement';screen.setAttribute('aria-label','칸 이동 중');screen.hidden=false;
+      refresh();
     },
     waitForMovement(){
       if(movementStarted===null)return Promise.resolve();

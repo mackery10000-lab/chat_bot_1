@@ -22,9 +22,8 @@ class CharacterDialogueTest(GameTestCase):
         self.a("select_npc", "explorer")
         before = self.stable_progress()
         self.t("explorer", "background")
-        for text in ("탐험가", "기록", "좋아", "편하게"):
+        for text in ("탐험가", "2016", "2026", "궁금해서", "신나는"):
             self.assertIn(text, self.data["reply"])
-        self.assertNotRegex(self.data["reply"], r"실종|사라진|2016")
         self.assertEqual(before, self.stable_progress())
         self.t("explorer", "injury")
         self.assertIn("낡은 바닥이 무너져", self.data["reply"])
@@ -152,17 +151,80 @@ class CharacterDialogueTest(GameTestCase):
         self.assertIn("협조", character_mood("driver", {"year_proven": True}))
 
 
+class YearClaimBeforeEvidenceTest(GameTestCase):
+    def test_evidence_opens_only_after_saying_it_is_not_2016(self):
+        self.engine()
+        self.a("prepare_evidence", "ticket_current")
+        self.assertIsNone(self.data["game"]["confirmation"])
+        self.assertIn("2016년이 아니라고 말해야", self.data["reply"])
+        self.assertFalse(self.data["game"]["controls"]["proof"])
+        # 청소원 분실물 설명처럼 '직접 말한다' 선택지가 입력창을 연다.
+        self.a("select_npc", "driver")
+        labels = [c["label"] for c in self.data["game"]["choices"]]
+        self.assertEqual(labels, ["지금이 몇 년인지 직접 말한다."])
+        choice = self.data["game"]["choices"][0]
+        self.call(action=choice["action"])
+        self.assertTrue(self.data["ui"].get("compose"))
+        self.assertFalse(self.flags().get("year_claimed"))
+        self.call(value=intent(target="driver", topic="year"), message="지금 몇 년이에요?")
+        self.assertFalse(self.flags().get("year_claimed"))
+        # 자유 대화로 분류돼도 주장은 진행으로 처리된다.
+        claim = dict(intent(target="driver", topic="other"), dialogue_mode="lore")
+        self.call(value=claim, message="기관사님, 지금은 2016년이 아니에요.")
+        self.assertTrue(self.flags()["year_claimed"])
+        self.assertIn("증명할 자료", self.data["reply"])
+        self.assertTrue(self.data["game"]["controls"]["proof"])
+        self.assertIn("보관함에서 자료를 살펴본다.", [c["label"] for c in self.data["game"]["choices"]])
+        self.a("prepare_evidence", "ticket_current")
+        self.assertEqual(self.data["game"]["confirmation"]["kind"], "evidence")
+
+
+class DriverDismissalTest(GameTestCase):
+    def test_wrong_evidence_lets_the_driver_send_the_player_out_before_the_ending(self):
+        self.engine()
+        self.prove("elder_testimony")
+        self.assertEqual(self.data["game"]["status"], "bad")
+        self.assertIn("당장 기관실에서 나가십시오", self.data["reply"])
+        self.assertEqual(self.data["game"]["npc"], "driver")
+        self.assertEqual(self.data["game"]["ending_video"]["kind"], "bad")
+
+    def test_wrong_final_input_also_ends_with_the_driver_line(self):
+        self.engine()
+        self.prove()
+        self.submit(password="2016")
+        self.assertEqual(self.data["game"]["status"], "bad")
+        self.assertIn("분기기가 완전히 잠겼습니다", self.data["reply"])
+        self.assertEqual(self.data["game"]["npc"], "driver")
+
+
+class ElderTripQuestionTest(GameTestCase):
+    def test_answering_where_the_player_is_going_continues_the_elder_story(self):
+        self.three()
+        self.a("select_npc", "elder")
+        self.assertIn("어디로 가는 길", self.data["reply"])
+        before = deepcopy(self.flags())
+        self.call(value=intent(target="elder", topic="destination"), message="서울로 출장 가는 길이에요.")
+        self.assertIn("그렇구먼", self.data["reply"])
+        self.assertIn("찾고 있었는데", self.data["reply"])
+        self.assertNotIn("표부터 찾아야", self.data["reply"])
+        self.assertFalse(self.flags().get("destination_hint"))
+        self.assertEqual(set(before) - {"elder_met"}, set(self.flags()) - {"elder_met"})
+        self.assertIn("뭘 찾고 계신데요?", [o["label"] for o in self.data["game"]["choices"]])
+
+    def test_question_back_is_not_taken_as_the_players_answer(self):
+        self.three()
+        self.a("select_npc", "elder")
+        self.call(value=intent(target="elder", topic="destination"), message="어르신은 어디로 가세요?")
+        self.assertNotIn("그렇구먼", self.data["reply"])
+
+
 class PlaytestFeedbackTest(GameTestCase):
-    def test_explorer_stop_does_not_introduce_case_but_case_grants_newspaper(self):
+    def test_explorer_gives_newspaper_whenever_the_disappearance_comes_up(self):
         self.a("inspect", "notice"); self.a("move", "car_2")
         self.a("select_npc", "explorer")
         self.assertNotIn("newspaper", self.items())
         self.t("explorer", "stop")
-        self.assertIn("멈추는 방법", self.data["reply"])
-        self.assertNotIn("newspaper", self.items())
-        self.assertFalse(self.flags().get("explorer_case_known"))
-        self.assertEqual(self.data["events"], [])
-        self.t("explorer", "case")
+        self.assertIn("멈추고 싶은 마음", self.data["reply"])
         self.assertIn("신문", self.data["reply"])
         self.assertIn("newspaper", self.items())
         self.assertTrue(self.flags()["explorer_case_known"])
@@ -193,6 +255,23 @@ class PlaytestFeedbackTest(GameTestCase):
         self.t("attendant", "permission")
         self.assertIn("승무원실 문", self.data["reply"])
 
+    def test_attendant_anomaly_answer_is_not_lost_to_free_dialogue_or_stop(self):
+        self.four(); self.a("select_npc", "attendant")
+        gid = self.client.get_cookie(web.COOKIE).value
+        state = self.service.store.get(gid)
+        state["scenario_steps"] = {"attendant": "anomaly"}  # '당신도 이상 현상을 알고 있습니까?' 직후
+        with self.service.store.connect() as db:
+            db.execute("UPDATE games SET state=? WHERE id=?", (json.dumps(state, ensure_ascii=False), gid))
+        free = dict(intent(target="attendant", topic="other"), dialogue_mode="smalltalk")
+        self.call(value=free, message="열차가 계속 달리기만 하고 안 멈춰요.")
+        self.assertTrue(self.flags()["anomaly_discussed"])
+        self.assertIn("저만 이상하게", self.data["reply"])
+        labels = [o["label"] for o in self.data["game"]["choices"]]
+        self.assertNotIn("네.", labels)
+        # 이상 현상을 말한 뒤의 정차 요구는 다시 이상 현상 답으로 바뀌지 않고 부탁으로 이어진다.
+        self.call(value=intent(target="attendant", topic="stop"), message="그러니까 열차를 멈춰야 해요.")
+        self.assertIn("승무원실 문", self.data["reply"])
+
     def test_driver_explains_next_station_and_does_not_repeat_acceptance(self):
         self.engine()
         self.t("driver", "stop")
@@ -202,7 +281,7 @@ class PlaytestFeedbackTest(GameTestCase):
         self.assertIn("비밀번호", self.data["reply"])
         self.prove()
         self.t("driver", "year")
-        self.assertIn("2026년", self.data["reply"])
+        self.assertIn("10년이나", self.data["reply"])
         self.t("driver", "help")
         self.assertNotIn("10년이나", self.data["reply"])
         self.assertIn("한 번", self.data["reply"])
@@ -216,6 +295,47 @@ class PlaytestFeedbackTest(GameTestCase):
                                  fallback_reply("explorer", "smalltalk"))
         self.assertEqual(approve_free_reply("안녕하세요. 발목은 아파도 기분은 좋네요.", "explorer", "smalltalk", {}),
                          "안녕하세요. 발목은 아파도 기분은 좋네요.")
+
+
+class ScenarioReactionTest(GameTestCase):
+    def test_reaction_sentence_is_kept_only_when_it_adds_no_facts(self):
+        from services.generator import approved_reply
+        canonical = "역시 저만 이상하게 느낀 것이 아니었군요."
+        good = "열차가 안 멈춘다고요?"
+        self.assertEqual(approved_reply(good + "\n" + canonical, canonical, "attendant", {}), good + "\n" + canonical)
+        rejected = (
+            "승차권은 제가 확인했습니다.",          # 진행 단어와 상태 주장
+            "2026년이라니 놀랍네요.",              # 인식 연도 밖의 숫자
+            "그렇군요. 정말 이상하네요.",           # 두 문장
+            "다시 뵈니 반갑습니다.",               # 재회 표현
+            "그 말씀을 들으니 " + "정말 " * 30 + "놀랍네요.",  # 너무 긺
+            "역시 저만 이상하게 느낀 것이 아니었군요.",  # 서버 대사 반복
+        )
+        for reaction in rejected:
+            with self.subTest(reaction=reaction):
+                self.assertEqual(approved_reply(reaction + "\n" + canonical, canonical, "attendant", {}), canonical)
+        elder = "아이고, 반갑소."
+        self.assertEqual(approved_reply("아이고 놀랐네.\n" + elder, elder, "elder", {}), elder)
+        # 서버 대사를 바꿔 쓴 답은 반응과 상관없이 원문으로 되돌린다.
+        self.assertEqual(approved_reply(good + "\n역시 그렇군요.", canonical, "attendant", {}), canonical)
+
+    def test_reaction_reaches_the_player_but_history_keeps_server_line(self):
+        self.four(); self.a("select_npc", "attendant")
+        self.t("attendant", "permission")
+        reaction = "열차가 안 멈춘다고요?"
+        original = self.model.generate
+
+        def react(question, username, character, knowledge):
+            return reaction + "\n" + original(question, username, character, knowledge)
+
+        with patch.object(self.model, "generate", side_effect=react):
+            self.call(value=intent(target="attendant", topic="loop"), message="열차가 안 멈춰요.")
+        self.assertTrue(self.data["reply"].startswith(reaction + "\n"))
+        self.assertTrue(self.flags()["anomaly_discussed"])
+        state = self.service.store.get(self.client.get_cookie(web.COOKIE).value)
+        last = state["history"][-1]
+        self.assertEqual(last["text"], self.data["reply"])
+        self.assertTrue(last["record"].startswith("역시 저만"))
 
 
 class CharacterInterpretationTest(unittest.TestCase):

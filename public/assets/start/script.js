@@ -12,6 +12,7 @@
   const line1 = document.getElementById('line1');
   const line2 = document.getElementById('line2');
   const full = document.getElementById('narration-full');
+  if(!line1||!line2||!full)return;
 
   // 화면 낭독기는 처음부터 전체 문장을 읽게
   full.textContent = LINES.join(' ');
@@ -24,16 +25,22 @@
     line2.textContent = LINES[1].slice(0, Math.max(0, n - LINES[0].length));
   }
 
-  // 움직임 줄이기 설정이면 바로 전체 표시
-  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (reduce) {
-    render(total);
-    return;
+  let n = 0, timer = null, due = 0, remaining = START_DELAY;
+  // Text reveal is independent of the OS setting for spatial motion effects.
+  render(0);
+
+  function schedule(delay) {
+    clearTimeout(timer);timer=null;remaining=delay;
+    if(document.hidden||n>=total)return;
+    due=performance.now()+delay;timer=setTimeout(tick,delay);
   }
-
-  let n = 0;
-
+  function pause() {
+    if(timer!==null){remaining=Math.max(0,due-performance.now());clearTimeout(timer);timer=null;}
+  }
+  function resume() {if(timer===null&&n<total)schedule(remaining);}
   function tick() {
+    timer=null;
+    if(document.hidden)return;
     n += 1;
     render(n);
     if (n >= total) return;
@@ -44,9 +51,13 @@
     if (n === LINES[0].length) delay = LINE_DELAY;
 
     // 환경 설정의 글자 속도 반영
-    const mul = window.gameSettings ? window.gameSettings.speedMultiplier() : 1;
-    setTimeout(tick, delay * mul);
+    let mul=1;
+    try{const value=Number(window.gameSettings&&window.gameSettings.speedMultiplier());if(Number.isFinite(value)&&value>0)mul=value;}catch{}
+    schedule(delay * mul);
   }
 
-  setTimeout(tick, START_DELAY);
+  schedule(START_DELAY);
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();else resume();});
+  window.addEventListener('pagehide',pause);
+  window.addEventListener('pageshow',resume);
 })();

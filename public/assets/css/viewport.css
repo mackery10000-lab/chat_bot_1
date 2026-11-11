@@ -2,7 +2,6 @@
    registered hit areas share one native aspect ratio; UI flows independently. */
 html:has(.chat-page){height:100%;overflow:hidden;scrollbar-gutter:auto}
 .chat-page{
-  --font:TrainKorean,'Malgun Gothic',sans-serif;
   height:100vh;height:100dvh;min-height:0;overflow:hidden;
   font-synthesis:none;text-rendering:optimizeLegibility;
   background:radial-gradient(ellipse at 40% 45%,#2b2117,#0d0c0a 75%);
@@ -43,9 +42,7 @@ html:has(.chat-page){height:100%;overflow:hidden;scrollbar-gutter:auto}
 .chat-page .interaction-guide{font-size:clamp(11px,1.15vw,16px);line-height:1.6;color:#f0e2c6}
 .chat-page .conversation-badge button{font-size:clamp(11px,1vw,14px)}
 .chat-page .dialogue-box{max-width:1020px}
-.chat-page .dialogue-text{color:#282319;font-weight:400;-webkit-text-stroke:0}
-.chat-page .dialogue-box.narration .dialogue-text,
-.chat-page .testimony-clue,.chat-page .map-toggle span{-webkit-text-stroke:0}
+.chat-page .dialogue-text{color:#282319;font-weight:400}
 .chat-page .speaker-tab{font-size:clamp(12px,1.2vw,18px)}
 .chat-page .hint-title{font-size:11px}
 .chat-page .chat-input-area textarea::placeholder{color:#c7b99c}

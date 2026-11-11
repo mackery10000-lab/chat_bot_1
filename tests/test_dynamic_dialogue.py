@@ -338,7 +338,7 @@ class LiveDialogueHarnessTest(unittest.TestCase):
                 raw["intent"] = "accept"
             elif "아지산역으로" in message:
                 raw["topic"] = "destination"
-            elif "몇 년" in message:
+            elif "몇 년" in message or "2026" in message:
                 raw["topic"] = "year"
             else:
                 self.fail("Unmapped offline fixture input")

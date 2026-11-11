@@ -32,9 +32,11 @@ class DemoImageSelector:
         sizes = {key: spec["size"] for key, spec in LAYOUT["scenes"].items()}
         dark = location == "car_3" and not flags.get("light_on")
         people = []
-        if not dark and state["status"] == "playing" and not flags.get("route_open"):
+        # 실패 직전 기관사가 내쫓는 대사를 하는 동안에는 그 인물만 화면에 남긴다.
+        final_speaker = state["status"] == "bad" and state.get("npc")
+        if not dark and (state["status"] == "playing" or final_speaker) and not flags.get("route_open"):
             for npc_id, npc in config["npcs"].items():
-                if npc["location"] != location:
+                if npc["location"] != location or (final_speaker and npc_id != state["npc"]):
                     continue
                 active = state["npc"] == npc_id
                 expression = state.get("expression", "neutral") if active else ("guarded" if npc_id == "attendant" and not flags.get("door_open") else "relieved" if npc_id == "elder" and flags.get("ticket_returned") else "neutral")
@@ -62,7 +64,7 @@ class DemoImageSelector:
             if location == "car_1":
                 registered("car1.notice")
                 registered("car1.window")
-            elif location == "car_4" and flags.get("mission_accepted") and not door_available:
+            elif location == "car_4" and flags.get("mission_accepted") and flags.get("manual_read") and not door_available:
                 registered("crew-door.crew_door")
                 registered("crew-door.inspection_cover")
                 registered("crew-door.door_handle")

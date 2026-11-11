@@ -40,10 +40,10 @@
     window.TrainAudio?.setVolume(settings.bgm);
   }
 
-  openBtn.addEventListener('click', function () { settings.bgm = window.TrainAudio?.getVolume() ?? settings.bgm; apply(); dialog.showModal(); });
+  openBtn.addEventListener('click', function () { settings.bgm = window.TrainAudio?.getVolume() ?? settings.bgm; apply(); window.TrainUI.openDialog(dialog); });
 
   // 바깥(어두운 배경) 클릭 시 닫기
-  dialog.addEventListener('click', function (e) { if (e.target === dialog) dialog.close(); });
+  dialog.addEventListener('click', function (e) { if (e.target === dialog) window.TrainUI.closeDialog(dialog); });
 
   bgm.addEventListener('input', function () { settings.bgm = Number(bgm.value); apply(); save(); });
   sfx.addEventListener('input', function () { settings.sfx = Number(sfx.value); apply(); save(); });

@@ -169,7 +169,13 @@ class GameTestCase(unittest.TestCase):
         self.a("move", "engine")
         self.t("driver", "destination")
 
+    def claim_year(self):
+        # 증거를 꺼내기 전에 기관사에게 '지금은 2016년이 아니다'라고 말해야 한다.
+        self.call(value=intent(target="driver", topic="year"), message="지금은 2016년이 아니라 2026년이에요.")
+
     def prove(self, item="ticket_current"):
+        if not self.flags().get("year_claimed"):
+            self.claim_year()
         self.a("prepare_evidence", item)
         self.a("confirm", token=self.data["game"]["confirmation"]["token"])
 
@@ -515,6 +521,7 @@ class SmokeTest(GameTestCase):
 
     def test_evidence_cancel_is_safe(self):
         self.engine()
+        self.claim_year()
         self.a("prepare_evidence", "flashlight")
         self.assertEqual(self.data["game"]["status"], "playing")
         self.a("cancel")
@@ -531,6 +538,7 @@ class SmokeTest(GameTestCase):
             with self.subTest(item=item):
                 self.new()
                 self.engine()
+                self.claim_year()
                 self.a("prepare_evidence", item)
                 self.assertEqual(self.data["game"]["status"], "playing")
                 self.a("confirm", token=self.data["game"]["confirmation"]["token"])
@@ -1190,9 +1198,10 @@ class SmokeTest(GameTestCase):
                     for npc, stages in self.service.engine.scenario.items()
                     for stage, node in stages.items()
                     for choice in node.get("choices", []) if choice.get("narration")]
-        self.assertEqual(len(narrated), 4)
+        self.assertEqual(len(narrated), 5)
         self.engine()
         self.a("select_npc", "driver")
+        self.claim_year()
         self.pick("보관함에서 자료를 살펴본다.")
         last = self.data["game"]["history"][-1]
         self.assertEqual(self.data["reply"], "현재 연도를 뒷받침할 자료를 직접 골라 보자.")
@@ -1267,6 +1276,9 @@ class SmokeTest(GameTestCase):
         self.pick("비밀번호가 뭐죠?")
         self.assertTrue(self.flags()["driver_explained"])
         self.assertIn("2016", self.data["reply"])
+        # 2016년이 아니라고 주장하기 전에는 보관함 선택지가 없다.
+        self.assertNotIn("보관함에서 자료를 살펴본다.", [c["label"] for c in self.data["game"]["choices"]])
+        self.claim_year()
         self.pick("보관함에서 자료를 살펴본다.")
         self.assertTrue(self.data["ui"]["inventory"])
         self.assertFalse(self.flags().get("year_proven"))
@@ -1305,6 +1317,16 @@ class SmokeTest(GameTestCase):
     def test_hint_preserves_final_evidence_and_input_decisions(self):
         self.engine()
         self.assertFalse(any(c["kind"] == "hint" for c in self.data["game"]["choices"]))
+        option = self.hint_choice()
+        self.assertEqual(option["id"], "hint.engine.claim_year")
+        self.call(action=option["action"])
+        # 힌트는 입력창만 열고, 연도 주장은 플레이어가 직접 입력해야 한다.
+        self.assertTrue(self.data["ui"].get("compose"))
+        self.assertIn("기관사가 당신의 대답을 기다린다", self.data["reply"])
+        self.assertFalse(self.flags().get("year_claimed"))
+        self.claim_year()
+        self.assertTrue(self.flags()["year_claimed"])
+        self.assertFalse(self.flags().get("year_proven"))
         option = self.hint_choice()
         self.assertEqual(option["id"], "hint.engine.review_records")
         self.call(action=option["action"])
@@ -1661,7 +1683,7 @@ class RegisteredSceneTest(GameTestCase):
     def test_scene_ratio_and_interactions_match_supplied_backgrounds(self):
         gid = self.client.get_cookie(web.COOKIE).value
         state = self.service.store.get(gid)
-        state["flags"].update(light_on=True, mission_accepted=True, door_open=True)
+        state["flags"].update(light_on=True, mission_accepted=True, manual_read=True, door_open=True)
         expected = {"car_1": {"notice", "window"}, "car_4": {"crew_door", "inspection_cover", "door_handle"},
                     "crew": {"report"}, "engine": {"control", "engine_lever"}}
         for location in ("car_1", "car_2", "car_3", "car_4", "crew", "engine"):
@@ -1685,7 +1707,7 @@ class DoorNavigationTest(GameTestCase):
         state["npc"] = ""
         state["flags"].update(
             notice_read=True, supplies_received=True, light_on=True,
-            ticket_recovered=True, ticket_returned=True, destination_hint=True,
+            ticket_recovered=True, ticket_returned=True, destination_hint=True, manual_read=True,
             mission_accepted=True, cover_open=True, lever_down=True, door_open=True,
             report_read=True, engine_permission=False,
         )

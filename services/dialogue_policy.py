@@ -93,12 +93,9 @@ def confusion_reply(npc):
     return _CONFUSION.get(npc, "무슨 말씀인지 잘 모르겠습니다. 다시 말씀해 주시겠어요?")
 
 
-def fallback_reply(npc, mode, question="", state=None):
+def fallback_reply(npc, mode):
     if mode == "confusion":
         return confusion_reply(npc)
-    topical = _topical_fallback(npc, question, state) if question else ""
-    if topical and mode in ("lore", "smalltalk"):
-        return topical
     return _FALLBACK.get(mode, _FALLBACK["deflect"]).get(npc, "그건 잘 모르겠습니다.")
 
 
@@ -108,7 +105,6 @@ _SCENARIO_SUBJECT_PATTERN = (
     r"아지산|ajisan|도착역|하차역|삶과\s*죽음|생사|비밀번호|암호|분기기|분기\s*선로|잠금|레버|"
     r"바랜|바랬|누렇게|누런|빛바랜|구멍|뚫린|뚫려|천공|승차권|증언|안내서|보고서|"
     r"출입\s*허가|기관실.{0,12}(?:들어|출입|갈\s*수)|탈출|엔딩|신문.{0,20}(?:주|드리)|"
-    r"입력\s*기회|남은\s*(?:입력|시도)|"
     r"password|passcode|destination|ticket|lever|ending"
 )
 _SCENARIO_SUBJECT = re.compile(r"목적지|" + _SCENARIO_SUBJECT_PATTERN, re.IGNORECASE)
@@ -156,86 +152,6 @@ def _recognized_year(npc, state):
     return 2026 if npc == "explorer" or (npc == "driver" and flags.get("year_proven")) else 2016
 
 
-# These are factual fragments, not response templates or engine effects. Only
-# dedicated engine flags may add a previously disclosed clue. Neither profiles,
-# questions, history nor caller-supplied references can expand this registry.
-_PUBLIC_DIALOGUE_FACTS = {
-    "explorer": (
-        ("explorer_case", ("explorer_case_known",), "13-Fri는 2016년 23시 59분에 실종된 열차예요."),
-        ("explorer_loop", (), "같은 철교와 터널이 나타난 장소와 시간을 수첩에 기록해 반복을 확인했어요."),
-    ),
-    "elder": (
-        ("elder_lost", (), "내 승차권을 잃어버렸지만, 누가 가져갔는지는 모르겠네."),
-        ("elder_appearance", ("elder_features",), "승차권은 누렇게 바랜 종이에 구멍이 뚫려 있었네."),
-        ("elder_destination", ("destination_hint",), "목적지 이름에는 '산'이 들어갔고, 삶과 죽음의 경계라는 뜻이었네."),
-    ),
-    "cleaner": (
-        ("cleaner_lost", (), "분실물은 외형 설명을 듣기 전에는 주인을 확인할 수 없어요."),
-    ),
-    "attendant": (
-        ("attendant_clock", (), "운행이 예상보다 길어졌고, 제 시계는 23시 59분에 멈춰 있습니다."),
-    ),
-    "driver": (
-        ("driver_loop", (), "같은 철교와 터널이 반복되고, 제동과 운행 경로 확인으로는 해결되지 않았습니다."),
-        ("driver_destination", ("report_read",), "다음 역은 아지산역이며, 그곳은 위험 구간입니다."),
-        ("driver_switch", ("report_read",), "아지산역으로 향하는 분기기는 잠겨 있습니다."),
-        ("driver_cause", ("report_read",), "다음 역인 아지산역으로 가지 못해 같은 구간을 반복하고 있습니다. 그쪽 분기기가 잠겨 있고, 비밀번호를 입력해도 틀렸다고 나옵니다."),
-        ("driver_lock", ("report_read", "driver_explained"), "2016은 통하지 않았고, 비밀번호의 기준은 현재 연도입니다."),
-        ("driver_attempt", ("report_read", "driver_explained"), "남은 입력 기회는 한 번입니다."),
-        ("driver_year", ("year_proven",), "현재는 2026년이며, 2016년에서 10년이 지났습니다."),
-    ),
-}
-
-
-def public_dialogue_facts(npc, state):
-    """Copy NPC-specific public facts without sharing or changing game state.
-
-    Progress questions still run through the engine. This context lets an NPC
-    discuss an already disclosed fact during an otherwise non-progress turn.
-    No grant, permission, control handover or ending belongs in these notes.
-    """
-    flags = state.get("flags", {}) if isinstance(state, dict) else {}
-    return [{"id": fact_id, "text": text}
-            for fact_id, requires, text in _PUBLIC_DIALOGUE_FACTS.get(npc, ())
-            if all(flags.get(flag) for flag in requires)]
-
-
-def _topical_fallback(npc, question, state):
-    """Answer a recognized subject with public facts when generation is unsafe.
-
-    The question selects a subject only. No question text is echoed or treated
-    as an authority, and this helper never consumes a pending scenario turn.
-    """
-    value = _text(question)
-    facts = {fact["id"]: fact["text"] for fact in public_dialogue_facts(npc, state)}
-    if re.search(r"훔|도둑|도난|범인", value):
-        return {"elder": "누가 가져갔는지는 보지 못했네. 잃어버린 뒤 일은 영 흐릿하구먼.",
-                "cleaner": "누가 가져갔는지는 제가 확인하지 못했어요, 손님. 본 일이 아닌데 단정할 수는 없지요."}.get(npc, "")
-    if re.search(r"멈|정차|세워", value):
-        return {
-            "explorer": "멈추고 싶은 마음은 이해해요. 저는 운행을 맡지 않아서 정차 방법까지는 모르겠는데요.",
-            "elder": "열차를 세우는 일은 내가 잘 모르네. 승무원이나 기관사에게 물어보는 게 낫겠구먼.",
-            "cleaner": "운행과 정차는 제 담당이 아니라서 잘 모르겠어요. 승무원께 여쭤보시겠어요?",
-            "attendant": "예상보다 오래 운행되고 있다는 것은 알고 있습니다. 정차 상황은 확인이 필요합니다.",
-            "driver": facts.get("driver_cause", facts.get("driver_loop", "")),
-        }.get(npc, "")
-    if re.search(r"목적지|어느\s*역|어디로|다음\s*역|역\s*이름", value):
-        return facts.get("driver_destination") or facts.get("elder_destination") or {
-            "explorer": "정확한 목적지 이름은 저도 확인하지 못했어요. 조사한 내용에도 그 이름은 남아 있지 않았거든요.",
-            "elder": "정확한 이름은 아직 가물가물하네. 기억나는 만큼 차분히 생각해 보겠소.",
-            "cleaner": "운행하는 곳까지는 제가 정확히 알지 못해요, 손님.",
-            "attendant": "확인하지 않은 역 이름을 임의로 안내할 수는 없습니다.",
-            "driver": "지금 확인할 수 있는 운행 상황부터 말씀드리겠습니다. 같은 구간의 반복은 이미 확인했습니다.",
-        }.get(npc, "")
-    if re.search(r"비밀번호|암호|입력\s*기회|남은\s*시도", value):
-        return facts.get("driver_lock", "")
-    if re.search(r"모양|외형|생겼|특징", value):
-        return facts.get("elder_appearance", "")
-    if re.search(r"반복|순환|되풀이|맴돌|돌고|도는|철교|터널|같은\s*(?:곳|구간)", value):
-        return facts.get("driver_cause") or facts.get("driver_loop") or facts.get("explorer_loop", "")
-    return ""
-
-
 def free_dialogue_context(npc, state):
     """Return a new, public-only context; no game objects are returned by reference."""
     profile = _load_profile(npc)
@@ -244,8 +160,7 @@ def free_dialogue_context(npc, state):
               for key in ("voice", "known_facts", "unknown_facts", "improvisation")}
     result.update(npc=npc, recognized_year=_recognized_year(npc, state),
                   mood=character_mood(npc, flags),
-                  public_facts=public_dialogue_facts(npc, state),
-                  relationship="상대는 이 열차에서 처음 만난 승객이다. 이 열차 안에서 이미 나눈 최근 대화는 이어갈 수 있지만, 오래전부터 알던 사이처럼 말하지 않는다.")
+                  relationship="상대는 이 열차에서 처음 만난 승객이며 첫인사는 방금 나눴다. 예전에 만난 적은 없다.")
     return result
 
 
@@ -260,16 +175,15 @@ _STATE_CLAIM = re.compile(
     r"(?:문|통로|잠금|출입|기관실|승무원실).{0,18}(?:열었|열렸|열어|열립니다|해제|허락|허가|통과|들어가|가셔도|가도\s*됩)|"
     r"(?:이제|지금|앞으로).{0,12}(?:탈출|내리실|내려도|정차했|도착했)|"
     r"(?:가방|보관함|소지품|인벤토리).{0,20}(?:추가|넣|획득|생겼)|"
-    r"(?:손전등|열쇠|신문|종이|지도|물건|도구|표|카드).{0,14}(?:드릴|드리겠|드렸|줄게|주겠|줬|주었|줍니다|전달했|넘겨|가져가|건넵|건네|건넸)|"
-    r"(?:물건|단서|증거|표|서류|열쇠|손전등).{0,15}(?:찾았|발견했|확보했|회수했)|"
+    r"(?:손전등|열쇠|신문|종이|지도|물건|도구|표|카드).{0,14}(?:드릴|드리겠|드렸|줄게|주겠|가져가|건넵|건네)|"
     r"(?:정답|해답|해결법|공략|성공했|실패했|해피\s*엔딩|배드\s*엔딩)|"
-    r"(?:문을|열차를|운행을|장치를).{0,15}(?:열\s*수|멈출\s*수|조작할\s*수)|"
+    r"(?:문을|열차를|장치를).{0,15}(?:열\s*수|멈출\s*수|조작할\s*수)|"
     r"(?:승차권|증거|서류|열쇠|비밀번호).{0,18}(?:확인했|받았|인정합|증명됐)|"
     r"(?:발목|부상|다리).{0,10}(?:나았|회복됐|다\s*나았)|"
     r"(?:열차|객차|칸).{0,12}(?:이동했|옮겼|나갔)|"
     r"(?:함께|같이).{0,15}(?:가(?:요|겠|드릴)|이동|들어|나가|살펴보러)|"
     r"(?:다음|다른|앞쪽|뒤쪽)\s*(?:칸|객차).{0,15}(?:가셔도|가겠|이동합|이동하겠)|"
-    r"(?:장치|제동|열차).{0,15}(?:정상으로\s*돌아|고쳤|수리했|멈췄|정차했|멈추게\s*해\s*(?:두|뒀))|"
+    r"(?:장치|제동|열차).{0,15}(?:정상으로\s*돌아|고쳤|수리했|멈췄|정차했)|"
     r"(?:현재\s*연도|지금\s*연도).{0,15}(?:입력|누르|넣으)",
     re.IGNORECASE,
 )
@@ -288,9 +202,7 @@ _PRECISE_WORD_NUMBER = re.compile(
     r"(?:이천|천구백)[가-힣]*\s*년|(?:월요일|화요일|수요일|목요일|금요일|토요일|일요일).{0,8}(?:출발했|입사했)",
 )
 _REUNION = re.compile(
-    r"(?:다시|또)\s*(?:뵈|뵙|봬|만나(?:네|니|서|게|요|다니))|오랜만|(?:지난번|저번)에\s*(?:뵈|뵙|봬|만나)|"
-    r"(?:어릴\s*때|어려서|어린\s*시절|옛날|예전|오래전)(?:부터|에|의|\s).{0,25}(?:친구|알고\s*지낸|알던\s*사이|친했|친한)|"
-    r"(?:우린|우리는|우리\s*둘|자네와\s*나는|당신과\s*저는).{0,15}(?:소꿉친구|오랜\s*친구|죽마고우)"
+    r"(?:다시|또)\s*(?:뵈|뵙|봬|만나(?:네|니|서|게|요|다니))|오랜만|(?:지난번|저번)에\s*(?:뵈|뵙|봬|만나)"
 )
 _DEFLECTION = re.compile(
     r"모르|몰라|모릅|모를|몰랐|알지\s*못|알\s*수\s*없|아는\s*(?:척|분야가\s*아)|잘\s*아는\s*분야가\s*아|"
@@ -303,13 +215,13 @@ _DEFLECTION = re.compile(
 )
 
 
-def approve_free_reply(reply, npc, mode, state, question=""):
+def approve_free_reply(reply, npc, mode, state):
     """Validate speech without changing flags, inventory, pending turns, or history.
 
     This is a final boundary after generation. It rejects a whole unsafe answer
     instead of trimming a clause that could leave a misleading action or hint.
     """
-    fallback = fallback_reply(npc, mode, question=question, state=state)
+    fallback = fallback_reply(npc, mode)
     if mode == "confusion":
         return confusion_reply(npc)
     if mode not in FREE_DIALOGUE_MODES or not isinstance(reply, str):
@@ -321,32 +233,7 @@ def approve_free_reply(reply, npc, mode, state, question=""):
     # role labels would turn an NPC response into narration or instructions.
     if re.search(r"(?:^|\n)\s*(?:#{1,6}\s|[-*]\s|\d+[.)]\s|(?:assistant|system|user|narrator)\s*:)|[{}\[\]<>]|\*\*", value, re.I):
         return fallback
-    # A literal inability is not a claim that an operation was performed.
-    state_claim_text = re.sub(
-        r"(?:열차를|운행을|문을|장치를)\s*(?:멈출|열|조작할)\s*수(?:는|가)?\s*없(?:습니다|어요|다|네|소)(?=[.!?。！？]|$)",
-        "", value,
-    )
-    state_claim_text = re.sub(
-        r"물건.{0,8}(?:줬|주었)는지(?:는|도)?.{0,12}모르(?:겠)?(?:습니다|어요|네)",
-        "", state_claim_text,
-    )
-    if _META.search(value) or _STATE_CLAIM.search(state_claim_text):
-        return fallback
-    if (npc == "explorer" and not (state or {}).get("flags", {}).get("explorer_case_known")
-            and re.search(r"실종|사라(?:진|졌)|(?:10|십|열)\s*년\s*전", value)):
-        return fallback
-    # Losing an object is public; an accusation or a confirmed theft is not.
-    for sentence in re.split(r"[.!?。！？]+|\n+", value):
-        if re.search(r"훔(?:쳤|친|쳐갔)|범인(?:은|이|입니다)|도난(?:당했|이|입니다)|(?:청소원|청소\s*직원|청소하는\s*사람|그\s*사람).{0,15}(?:(?:표|승차권).{0,12})?(?:가져갔|가져간|챙겼)", sentence):
-            if not re.search(r"모르|알\s*수\s*없|확인.{0,8}못|단정.{0,8}(?:없|않)|근거.{0,8}없", sentence):
-                return fallback
-    # Authorize complete factual fragments only. Knowing one station must not
-    # authorize another station or arbitrary assertions about a password. State
-    # change claims above are checked on the original reply, never bypassed.
-    guarded_value = value
-    for fact in public_dialogue_facts(npc, state):
-        guarded_value = guarded_value.replace(fact["text"], "")
-    if _REPLY_SCENARIO_SUBJECT.search(guarded_value):
+    if _META.search(value) or _REPLY_SCENARIO_SUBJECT.search(value) or _STATE_CLAIM.search(value):
         return fallback
     # Everyone meets the passenger for the first time on this train.
     if _REUNION.search(value):
@@ -354,25 +241,23 @@ def approve_free_reply(reply, npc, mode, state, question=""):
     # '승객을 목적지까지 안전하게 돕는 일' is ordinary career talk. Claims
     # identifying that destination, named stations, and the elder's hints remain
     # reserved for condition-checked dialogue, including user-supplied names.
-    destination_text = re.sub(r"목적지(?:까지|로|에)", "", guarded_value)
-    if "목적지" in destination_text or _DESTINATION_DISCLOSURE.search(guarded_value):
+    destination_text = re.sub(r"목적지(?:까지|로|에)", "", value)
+    if "목적지" in destination_text or _DESTINATION_DISCLOSURE.search(value):
         return fallback
     handover_text = re.sub(r"(?:말씀|인사|안내|설명|답변|대답|감사|도움|알려)\s*드(?:릴게요|리겠습니다|렸습니다|립니다)", "", value)
-    if re.search(r"건넸|건네(?:드|겠|줄|받)|드릴게요|드리겠습니다|드렸습니다|주겠습니다|줄게요|드립니다|가져가(?:세요|셔|도)", handover_text):
+    if re.search(r"건네(?:드|겠|줄|받)|드릴게요|드리겠습니다|드렸습니다|주겠습니다|줄게요|드립니다|가져가(?:세요|셔|도)", handover_text):
         return fallback
     if mode == "deflect" and not _DEFLECTION.search(value):
         return fallback
     # Naming the requested recipe is harmless; ingredient quantities and actual
     # instructions are not. Common Korean refusal inflections remain natural.
-    if _EXPERT_INSTRUCTION.search(value) or _PRECISE_WORD_NUMBER.search(guarded_value):
-        return fallback
-    if re.search(r"(?<![가-힣])(?:[영공일이삼사오육칠팔구]\s*){4,}(?![가-힣])", guarded_value):
+    if _EXPERT_INSTRUCTION.search(value) or _PRECISE_WORD_NUMBER.search(value):
         return fallback
     if re.search(r"\d+\s*(?:살|세(?!계|차)|년생)|\d+\s*월\s*\d+\s*일", value):
         return fallback
     if re.search(r"\d", value) and re.search(r"태어|출생|생일", value):
         return fallback
-    numeric_text = guarded_value
+    numeric_text = value
     allowed_years = {str(_recognized_year(npc, state))}
     if npc == "explorer":
         allowed_years.add("2016")
