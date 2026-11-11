@@ -23,6 +23,27 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: 'TrainKorean';
+  src: url('../css/NanumGothic.ttf') format('truetype');
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'TrainKorean';
+  src: url('../css/NanumGothicBold.ttf') format('truetype');
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'TrainStory';
+  src: url('../css/NanumMyeongjo-ExtraBold.ttf') format('truetype');
+  font-weight: 800;
+  font-display: swap;
+}
+
 :root {
   /* 배경 */
   --void: #0B0907;
@@ -62,8 +83,8 @@
   --ink-soft: #6B5434;
 
   /* 글꼴 */
-  --font-ui: 'OgRenaissanceSecret', 'Noto Sans KR', sans-serif;      /* 일반 글꼴 */
-  --font-story: 'OgRenaissanceSecret', 'Song Myung', serif;          /* 나레이션·이야기 글 */
+  --font-ui: 'TrainKorean', 'Malgun Gothic', sans-serif;            /* 일반 글꼴 */
+  --font-story: 'TrainStory', 'Batang', serif;                     /* 나레이션·이야기 글 */
   --font-title: 'Cinzel', 'Song Myung', serif;                       /* 간판 글꼴: 처음 영어에 쓰던 Cinzel (한글은 송명체로) */
   --font-serif-ko: 'Song Myung', serif;
   --font-serif-en: 'Cinzel', serif;
@@ -461,7 +482,7 @@ body {
   margin: 0;
   min-height: 70px;
   text-align: center;
-  font: 400 18px/1.9 var(--font-story);
+  font: 800 18px/1.9 var(--font-story);
   letter-spacing: 0.02em;
   color: var(--text-dim);
 }
@@ -656,7 +677,7 @@ body {
 }
 .register-head__desc {
   margin: 0;
-  font: 400 16px/1.8 var(--font-story);
+  font: 800 16px/1.8 var(--font-story);
   color: var(--text-dim);
 }
 
@@ -768,7 +789,7 @@ body {
   margin: 0;
   min-height: 58px;
   text-align: center;
-  font: 400 17px/1.8 var(--font-story);
+  font: 800 17px/1.8 var(--font-story);
   color: var(--text-dim);
 }
 .register-msg__name { color: var(--text-title); }

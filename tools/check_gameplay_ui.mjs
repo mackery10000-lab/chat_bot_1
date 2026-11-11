@@ -53,7 +53,7 @@ try {
  server.stderr.on('data',data=>{serverLog=(serverLog+data.toString()).slice(-8000);});
  const port=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Server startup timeout')),15000);server.stdout.on('data',data=>{const m=data.toString().match(/QA_PORT=(\d+)/);if(m){clearTimeout(timer);resolve(Number(m[1]));}});server.once('error',reject);server.once('exit',code=>reject(new Error('Server exited '+code)));});
  const base='http://127.0.0.1:'+port;
- browser=spawn(chromeExecutable(),['--headless=new',...(process.argv.includes('--software-renderer')?['--disable-gpu']:[]),'--no-first-run','--no-default-browser-check','--disable-background-networking','--disable-component-update','--disable-extensions','--disable-breakpad','--autoplay-policy=document-user-activation-required','--remote-debugging-port=0','--user-data-dir='+chromeProfile,'about:blank'],{windowsHide:true,stdio:['ignore','ignore','pipe']});
+ browser=spawn(chromeExecutable(),['--headless=new',...(process.argv.includes('--software-renderer')?['--disable-gpu']:[]),...(process.argv.includes('--no-sandbox')?['--no-sandbox']:[]),'--no-first-run','--no-default-browser-check','--disable-background-networking','--disable-component-update','--disable-extensions','--disable-breakpad','--autoplay-policy=document-user-activation-required','--remote-debugging-port=0','--user-data-dir='+chromeProfile,'about:blank'],{windowsHide:true,stdio:['ignore','ignore','pipe']});
  const ws=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Chrome startup timeout')),15000);browser.stderr.on('data',data=>{const m=data.toString().match(/DevTools listening on (ws:\/\/\S+)/);if(m){clearTimeout(timer);resolve(m[1]);}});browser.once('error',reject);});
  const Socket=websocketClass();socket=new Socket(ws);await new Promise((resolve,reject)=>{socket.addEventListener('open',resolve,{once:true});socket.addEventListener('error',reject,{once:true});});
  let id=0;const pending=new Map();
@@ -139,7 +139,7 @@ try {
    const text=manifest.records['elder-testimony-'+suffix+'.png'].lines.map(line=>line.text).join(' ').replace(/\s+/g,'');
    await check('printed testimony '+suffix+' contains only its earned clues',text.includes('누렇게')===appearance&&text.includes('커피')===appearance&&text.includes('삶과죽음')===destination&&!text.includes('아지산'));
   }
-  const baseRecords=[['ticket_current','ticket-current',0],['newspaper','newspaper',0],['flashlight','flashlight',1],['facility_manual','facility-manual',0],['ticket_old','ticket-old',1],['route_report','route-report',1],['elder_testimony','elder-testimony-10',0],['faded_paper','faded-paper',0],['punched_receipt','punched-receipt',0]];
+  const baseRecords=[['ticket_current','ticket-current',0],['newspaper','newspaper',0],['flashlight','flashlight',0],['facility_manual','facility-manual',0],['ticket_old','ticket-old',1],['route_report','route-report',1],['elder_testimony','elder-testimony-10',0],['faded_paper','faded-paper',0],['punched_receipt','punched-receipt',0]];
   for(const [width,height] of [[1440,1000],[1024,768],[390,844],[320,568]]){
    await viewport(width,height);await seed('base');await openBag();await fit('inventory overview '+width);
    await check('inventory overview preserves its original book, mounts and close control '+width,`getComputedStyle(document.querySelector('.inventory-overview')).backgroundImage.includes('book-overview.png')&&document.querySelector('.inventory-mount-art')?.getAttribute('src').endsWith('/inventory/photo-mount.png')&&!!document.querySelector('#close-overlay')`);
@@ -154,12 +154,17 @@ try {
     const metrics=await capture(id,artwork,actions);
     if(id==='elder_testimony')await check('testimony appearance state hides the unearned destination clue '+width,metrics.alt.includes('누렇게')&&!metrics.alt.includes('삶과 죽음')&&!metrics.alt.includes('아지산'));
    }
-   for(const [phase,id,artwork,actions] of [['returned','ticket_old','ticket-old-returned',1],['early','elder_testimony','elder-testimony-00',0],['hint_only','elder_testimony','elder-testimony-01',0],['full','elder_testimony','elder-testimony-11',0],['proof','ticket_current','ticket-current',1],['proof','flashlight','flashlight',2],['record_two_actions','route_report','route-report',2]]){
+   for(const [phase,id,artwork,actions] of [['returned','ticket_old','ticket-old-returned',1],['early','elder_testimony','elder-testimony-00',0],['hint_only','elder_testimony','elder-testimony-01',0],['full','elder_testimony','elder-testimony-11',0],['proof','ticket_current','ticket-current',1],['proof','flashlight','flashlight',1],['dark','flashlight','flashlight',1],['record_two_actions','route_report','route-report',2]]){
     await seed(phase);await openBag();const metrics=await capture(id,artwork,actions,artwork+'-'+phase);
     if(id==='elder_testimony')await check('testimony reveals only earned clues '+phase+' '+width,metrics.alt.includes('누렇게')===(phase==='full')&&metrics.alt.includes('삶과 죽음')===(phase!=='early')&&!metrics.alt.includes('아지산'));
     if(phase==='returned')await check('returned ticket retains its preserved-record explanation '+width,metrics.alt.includes('원본은 노인에게 돌려드렸다'));
    }
   }
+  await viewport(1440,1000);await seed('dark');await openBag();await openItem('flashlight');
+  await click('[aria-label="손전등 사용"]');await ready();
+  await check('flashlight use lights car three and closes inventory',`!document.querySelector('#overlay').open&&document.querySelector('#darkness').classList.contains('flashlight-mask')`);
+  await openBag();await openItem('flashlight');
+  await check('flashlight use disappears once car three is lit',`!document.querySelector('[aria-label="손전등 사용"]')`);
  };
  const cinematicReady=async(kind,file)=>{
   await wait(`document.querySelector('#cinematic')?.open&&document.querySelector('#cinematic').dataset.kind===${JSON.stringify(kind)}`);
@@ -368,7 +373,7 @@ try {
    await check('notice and close control fit the current display '+width,`(()=>{const d=document.querySelector('#overlay'),r=d.getBoundingClientRect(),c=document.querySelector('#close-overlay').getBoundingClientRect();return r.left>=0&&r.top>=0&&r.right<=innerWidth+1&&r.bottom<=innerHeight+1&&c.width>=44&&c.height>=44&&c.right<=innerWidth+1&&c.top>=0;})()`);
    await check('only clicking the notice unlocks carriage two '+width,`fetch('/api/game').then(r=>r.json()).then(d=>d.game.revision>${before}&&d.game.map.find(p=>p.id==='car_2').open)`);
    await snapshot('entry-notice-open-'+width);await click('#close-overlay');
-   await check('notice close restores scene controls and normal scrolling '+width,`!document.querySelector('#overlay').open&&getComputedStyle(document.documentElement).overflow!=='hidden'&&!!document.querySelector('[data-hotspot="notice"]')`);
+   await check('notice close restores scene controls '+width,`!document.querySelector('#overlay').open&&!document.querySelector(':modal')&&!document.querySelector('.chat-area').inert&&getComputedStyle(document.querySelector('.chat-area')).pointerEvents!=='none'&&!!document.querySelector('[data-hotspot="notice"]')`);
   }
   await viewport(1440,900);await landingReady();
   await click('[data-bgm-toggle]');await check('redrawn title sound button still mutes',`TrainAudio.isMuted()&&TrainAudio.element.paused`);
@@ -720,7 +725,7 @@ try {
    await wait("Math.abs(document.querySelector('.window-aperture video').currentTime-"+beforeTime+")>.08",'window scenery advances');
    await snapshot('window-frame-'+size);
    await retainWindow();await click('#close-overlay');await windowReleased();
-   await check('close releases video decoder and restores page scrolling '+size,"getComputedStyle(document.documentElement).overflow!=='hidden'&&window.__qaOldWindow.readyState===0");
+   await check('close releases video decoder and restores scene controls '+size,"!document.querySelector('#overlay').open&&!document.querySelector(':modal')&&!document.querySelector('.chat-area').inert&&getComputedStyle(document.querySelector('.chat-area')).pointerEvents!=='none'&&window.__qaOldWindow.readyState===0");
    await click('[data-hotspot="window"]');await ready();await windowReady();
    await check('reopening creates one fresh window player '+size,"document.querySelectorAll('.window-aperture video').length===1&&window.__qaOldWindow!==document.querySelector('.window-aperture video')&&!window.__qaOldWindow.isConnected&&window.__qaOldWindow.paused");
    await retainWindow();await escape();await windowReleased();
@@ -818,14 +823,20 @@ try {
    }
    await click('.inventory-back');await ready();await images();
   }
-  await check('general dialogue uses supplied font '+width,`getComputedStyle(document.querySelector('.dialogue-text')).fontFamily.startsWith('RenaissanceText')`);
+  await check('general dialogue uses readable Korean font '+width,`getComputedStyle(document.querySelector('.dialogue-text')).fontFamily.startsWith('TrainKorean')`);
   await check('game header is removed and minimap is first '+width,`!document.querySelector('.game-header')&&document.querySelector('.game-shell').firstElementChild.classList.contains('train-map-bar')`);
  }
  await viewport(1440,1000);await seed('dark');await openBag();await openItem('flashlight');
  await check('flashlight action is a printed dark paper image',`document.querySelector('[aria-label="손전등 사용"] img')?.src.endsWith('/actions/use-flashlight.png')`);
  await snapshot('flashlight-action');await click('[aria-label="손전등 사용"]');await ready();
  await check('using flashlight lights the actual scene and closes book',`!document.querySelector('#overlay').open&&document.querySelector('#darkness').classList.contains('flashlight-mask')`);
- await check('closing inventory restores normal page scrolling',`getComputedStyle(document.documentElement).overflow!=='hidden'`);
+ await check('closing inventory restores scene controls',`!document.querySelector('#overlay').open&&!document.querySelector(':modal')&&!document.querySelector('.chat-area').inert&&getComputedStyle(document.querySelector('.chat-area')).pointerEvents!=='none'`);
+ await openBag();await openItem('flashlight');
+ await check('flashlight use is hidden after lighting car three',`!document.querySelector('[aria-label="손전등 사용"]')`);
+ for(const phase of ['crew','car4','proof']){
+  await seed(phase);await openBag();await openItem('flashlight');
+  await check('flashlight use is hidden outside dark car three '+phase,`!document.querySelector('[aria-label="손전등 사용"]')`);
+ }
  await seed('crew');await openBag();await openItem('route_report');await click('[aria-label="보고서 내용 확인"]');await ready();
  await check('report confirmation still records a completed read',`fetch('/api/game').then(r=>r.json()).then(d=>d.game.inventory.find(i=>i.id==='route_report').read&&!document.querySelector('#overlay').open)`);
  await seed('proof');await openBag();await openItem('ticket_current');await click('[aria-label="이 물건을 최종 증거로 제출"]');await ready();

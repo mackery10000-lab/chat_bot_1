@@ -11,6 +11,12 @@
 7. image_selector.py는 열차 안 6개 장소, 문 개방, 손전등 시야, 현재 NPC와 표정에 따라 배경·인물·조사점 좌표를 제공한다. 마지막 제어 장치의 정답을 확정하면 즉시 GOOD이 되며 별도 출입문/승강장 장소는 없다. 엔딩은 game.ending_video로 영상을 제공한다.
 8. 기존 chatbot.js와 style.css가 일자 미니맵, 배경 조사점, 대화 시작·종료, 집중 조사, 획득 알림, 실제 준비 시간의 장면 로딩을 구현한다.
 
+2026-11-11 자유 입력 보정: `dialogue_routing.py`를 분류기와 서비스에서 공통 호출해
+현재 선택지의 의미와 질문 대기 상태를 연결한다. `dialogue_mode`가 자유 대화로
+분류되었다는 이유만으로 명확한 진행 답변을 버리지 않는다. 현재 선택지 ID 검증과
+위치·소유·열람·최종 확인은 계속 엔진이 담당한다. 공개된 사실만 읽기 전용
+`public_dialogue_facts`로 자유 응답에 제공한다. [규칙과 검증](FREE_TEXT_PROGRESSION.md)을 따른다.
+
 화면 클릭의 select_npc·present·end_talk·operate·read_item도 자유 채팅과 같은 엔진을 쓴다. 화면에서 정한 행동을 다시 AI 해석에 보내지 않는다. select_npc는 첫 인사를 즉시 반환하고 화자를 보존한다.
 
 요청 본문은 message 또는 action 중 하나다. 응답은 기존 reply·image·sources와 game·scene·ui·events를 유지한다. sources는 허용 자료 제목으로서 문장별 인용을 뜻하지 않는다. ui.ignored의 빈 reply는 불가능한 행동을 의도적으로 무시한 경우이며 API 실패와 다르다.

@@ -1,0 +1,80 @@
+/* Fit the play area to the viewport, as a game canvas would. The room and all
+   registered hit areas share one native aspect ratio; UI flows independently. */
+html:has(.chat-page){height:100%;overflow:hidden;scrollbar-gutter:auto}
+.chat-page{
+  --font:TrainKorean,'Malgun Gothic',sans-serif;
+  height:100vh;height:100dvh;min-height:0;overflow:hidden;
+  font-synthesis:none;text-rendering:optimizeLegibility;
+  background:radial-gradient(ellipse at 40% 45%,#2b2117,#0d0c0a 75%);
+}
+.chat-page .game-shell{
+  display:grid;grid-template-columns:minmax(0,1fr);
+  grid-template-rows:auto minmax(0,1fr) auto auto;gap:10px;
+  width:100%;max-width:none;height:100%;min-height:0;margin:0;
+  padding:max(8px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left));
+}
+.chat-page .scene-viewport{
+  grid-row:2;grid-column:1;display:flex;align-items:center;justify-content:center;
+  min-width:0;min-height:0;overflow:hidden;
+}
+.chat-page .scene-frame,.chat-page .conversation-active .scene-frame{
+  flex:none;width:var(--scene-width,100%);max-width:100%;height:auto;max-height:none;min-height:0;margin:0;
+}
+.chat-page .scene-world{max-width:100%;width:100%}
+.chat-page .scene-background{object-fit:contain}
+.chat-page .train-map-bar{
+  grid-row:1;grid-column:1;width:100%;margin:0;padding-bottom:0;
+  z-index:20;overflow:visible;
+}
+.chat-page .train-map-panel{
+  /* Filtering a surface animated down to zero height can leave a stale empty
+     compositor clip after reopening. Keep paper painting in the normal flow. */
+  position:relative;top:auto;margin-top:-3px;filter:none;transform:none;
+}
+.chat-page .train-map-sheet{background:#b89b6b}
+.chat-page .conversation-console,.chat-page .conversation-active .conversation-console{
+  grid-row:3;grid-column:1;width:100%;min-width:0;min-height:0;margin:0;
+}
+.chat-page .console-main{grid-template-columns:minmax(0,1fr);gap:8px}
+.chat-page .hints-and-choices{max-height:24dvh;overflow:auto;overscroll-behavior:contain}
+.chat-page .input-meta,.chat-page .input-meta #reply-status{font-size:11px;line-height:1.5}
+.chat-page .input-meta>span:last-child{font-size:10px;color:#b2a38b}
+.chat-page .error-banner{grid-row:4;grid-column:1;margin:0;font-size:13px}
+.chat-page .interaction-guide{font-size:clamp(11px,1.15vw,16px);line-height:1.6;color:#f0e2c6}
+.chat-page .conversation-badge button{font-size:clamp(11px,1vw,14px)}
+.chat-page .dialogue-box{max-width:1020px}
+.chat-page .dialogue-text{color:#282319;font-weight:400;-webkit-text-stroke:0}
+.chat-page .dialogue-box.narration .dialogue-text,
+.chat-page .testimony-clue,.chat-page .map-toggle span{-webkit-text-stroke:0}
+.chat-page .speaker-tab{font-size:clamp(12px,1.2vw,18px)}
+.chat-page .hint-title{font-size:11px}
+.chat-page .chat-input-area textarea::placeholder{color:#c7b99c}
+.chat-page .location-notice{font-size:clamp(12px,1vw,16px)}
+.chat-page .stop-state{font-size:clamp(9px,1.8cqw,12px)}
+.chat-page .map-caption small{font-size:clamp(8px,1.5cqw,11px)}
+@media(min-width:960px) and (min-aspect-ratio:5/4),
+       (min-width:600px) and (min-aspect-ratio:8/5){
+  .chat-page .game-shell{
+    grid-template-columns:minmax(0,1fr) clamp(260px,27vw,480px);
+    grid-template-rows:auto minmax(0,1fr) auto;gap:16px;
+    padding:max(12px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));
+  }
+  .chat-page .scene-viewport{grid-column:1;grid-row:1/-1}
+  .chat-page .train-map-bar{grid-column:2;grid-row:1;align-self:start}
+  .chat-page .train-map-panel{position:relative;top:auto;margin-top:-3px}
+  .chat-page .conversation-console,.chat-page .conversation-active .conversation-console{
+    grid-column:2;grid-row:2;align-self:end;
+  }
+  .chat-page .error-banner{grid-column:2;grid-row:3}
+  .chat-page .hints-and-choices{max-height:40dvh}
+  .chat-page .input-meta{flex-wrap:wrap}
+  .chat-page .input-meta>span:last-child{display:none}
+}
+@media(max-height:500px){
+  .chat-page .game-shell{gap:6px;padding:6px}
+  .chat-page .hints-and-choices{max-height:22dvh}
+  .chat-page .input-meta{margin-top:2px;min-height:0;font-size:10px}
+  .chat-page .chat-input-area{height:50px;min-height:50px;max-height:50px}
+  .chat-page .send-button{height:50px;min-height:50px}
+  .chat-page .conversation-badge{top:var(--scene-inset-y);right:calc(var(--scene-inset-x) + var(--scene-icon)*3.4)}
+}

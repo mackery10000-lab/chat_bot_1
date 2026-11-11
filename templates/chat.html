@@ -5,6 +5,8 @@
  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
  <title>{{ bot.name }}</title>
  <link rel="icon" href="data:,">
+ <link rel="preload" as="font" type="font/ttf" href="{{ asset_url('assets/css/NanumGothic.ttf') }}" crossorigin>
+ <link rel="preload" as="font" type="font/ttf" href="{{ asset_url('assets/css/NanumGothicBold.ttf') }}" crossorigin>
  <link rel="preload" as="image" href="{{ asset_url('assets/images/ui/dialogue-paper.png') }}">
  <link rel="preload" as="image" href="{{ asset_url('assets/images/ui/chat-input.png') }}">
  <link rel="preload" as="image" href="{{ asset_url('assets/images/ui/choice-paper.png') }}">
@@ -21,6 +23,7 @@
  <link rel="stylesheet" href="{{ asset_url('assets/css/game-panels.css') }}">
  <link rel="stylesheet" href="{{ asset_url('assets/css/train-map.css') }}">
  <link rel="stylesheet" href="{{ asset_url('assets/css/loading.css') }}">
+ <link rel="stylesheet" href="{{ asset_url('assets/css/viewport.css') }}">
  <script src="{{ asset_url('assets/js/audio.js') }}" defer></script>
  <script src="{{ asset_url('assets/js/puzzles.js') }}" defer></script>
  <script src="{{ asset_url('assets/js/loading.js') }}" defer></script>
@@ -41,6 +44,7 @@
   <div class="map-roll-edge" aria-hidden="true"></div>
  </nav>
 
+ <div class="scene-viewport">
  <section class="scene-frame" aria-label="현재 열차 장면">
   <div class="scene-world" id="scene-world" style="aspect-ratio:1403/1121">
    <img id="scene-image" class="scene-background" src="{{ asset_url('assets/images/car1/background.png') }}" alt="낡은 목재 객차">
@@ -73,6 +77,7 @@
    <div id="dialogue-text" class="dialogue-text" aria-live="polite"></div>
   </div>
  </section>
+ </div>
 
  <section class="conversation-console" aria-label="인물과 대화" hidden>
   <div class="console-main">
@@ -105,6 +110,8 @@
 <div id="acquisition-notice" class="acquisition-notice" role="status" aria-live="polite" hidden></div>
 <div id="toast" class="toast" role="status" hidden></div>
 <div id="scene-loading" class="scene-loading" role="status" aria-live="polite" aria-label="장면 로딩" hidden>
+ <div class="movement-passage" aria-hidden="true"><div class="movement-doorway"><span></span></div><div class="movement-rails"></div></div>
+ <div class="movement-status"><p class="movement-label">이동 중…</p><p id="movement-destination" class="movement-destination"></p></div>
  <p id="loading-lore" class="loading-lore" data-source="fallback">낡은 목재 객차 안으로 바퀴가 선로를 지나는 낮은 진동이 전해집니다.</p>
  <div class="loading-indicator" aria-hidden="true">
   <svg class="loading-eye" viewBox="0 0 64 64"><path class="loading-gear" d="M27 2h10l2 8 5 3 8-3 6 9-6 6v6l8 4-3 10-9-1-5 4-1 9H30l-3-8-6-2-7 5-8-8 4-8-1-6-8-4 3-10 9 1 5-4 1-9Z"/><path d="M11 31Q32 10 53 31Q32 52 11 31Z" fill="#000"/><ellipse cx="32" cy="31" rx="10" ry="11"/><ellipse cx="32" cy="31" rx="4" ry="6" fill="#000"/></svg>

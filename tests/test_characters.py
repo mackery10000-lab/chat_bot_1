@@ -22,8 +22,9 @@ class CharacterDialogueTest(GameTestCase):
         self.a("select_npc", "explorer")
         before = self.stable_progress()
         self.t("explorer", "background")
-        for text in ("탐험가", "2016", "2026", "궁금해서", "신나는"):
+        for text in ("탐험가", "기록", "좋아", "편하게"):
             self.assertIn(text, self.data["reply"])
+        self.assertNotRegex(self.data["reply"], r"실종|사라진|2016")
         self.assertEqual(before, self.stable_progress())
         self.t("explorer", "injury")
         self.assertIn("낡은 바닥이 무너져", self.data["reply"])
@@ -149,6 +150,72 @@ class CharacterDialogueTest(GameTestCase):
         self.assertEqual(payload["current_mood"], character["_runtime"]["mood"])
         self.assertEqual(payload["current_year_belief"], 2016)
         self.assertIn("협조", character_mood("driver", {"year_proven": True}))
+
+
+class PlaytestFeedbackTest(GameTestCase):
+    def test_explorer_stop_does_not_introduce_case_but_case_grants_newspaper(self):
+        self.a("inspect", "notice"); self.a("move", "car_2")
+        self.a("select_npc", "explorer")
+        self.assertNotIn("newspaper", self.items())
+        self.t("explorer", "stop")
+        self.assertIn("멈추는 방법", self.data["reply"])
+        self.assertNotIn("newspaper", self.items())
+        self.assertFalse(self.flags().get("explorer_case_known"))
+        self.assertEqual(self.data["events"], [])
+        self.t("explorer", "case")
+        self.assertIn("신문", self.data["reply"])
+        self.assertIn("newspaper", self.items())
+        self.assertTrue(self.flags()["explorer_case_known"])
+        self.assertFalse(self.flags().get("supplies_received"))
+
+    def test_elder_answers_stop_and_theft_without_repeating_greeting(self):
+        self.three()
+        self.t("elder", "greeting")
+        self.assertIn("반갑소", self.data["reply"])
+        before = deepcopy(self.flags())
+        self.t("elder", "stop")
+        self.assertIn("승무원이나 기관사", self.data["reply"])
+        self.t("elder", "lost_ticket")
+        self.assertIn("청소하는 사람", self.data["reply"])
+        self.assertNotRegex(self.data["reply"], "누렇게|바랜|구멍")
+        self.t("elder", "case")
+        self.assertNotIn("반갑소", self.data["reply"])
+        self.assertEqual(before, self.flags())
+        self.assertNotIn("elder_testimony", self.items())
+
+    def test_attendant_accepts_train_not_stopping_as_the_anomaly(self):
+        self.four(); self.a("select_npc", "attendant")
+        self.t("attendant", "permission")
+        self.assertIn("무슨 이상", self.data["reply"])
+        self.call(value=intent(target="attendant", topic="stop"), message="열차가 안 멈춰요.")
+        self.assertTrue(self.flags()["anomaly_discussed"])
+        self.assertIn("저만 이상하게", self.data["reply"])
+        self.t("attendant", "permission")
+        self.assertIn("승무원실 문", self.data["reply"])
+
+    def test_driver_explains_next_station_and_does_not_repeat_acceptance(self):
+        self.engine()
+        self.t("driver", "stop")
+        self.assertIn("다음 역인 아지산역", self.data["reply"])
+        self.t("driver", "loop")
+        self.assertIn("다음 역으로 가지 못하고", self.data["reply"])
+        self.assertIn("비밀번호", self.data["reply"])
+        self.prove()
+        self.t("driver", "year")
+        self.assertIn("2026년", self.data["reply"])
+        self.t("driver", "help")
+        self.assertNotIn("10년이나", self.data["reply"])
+        self.assertIn("한 번", self.data["reply"])
+
+    def test_free_dialogue_treats_everyone_as_a_first_meeting(self):
+        from services.dialogue_policy import approve_free_reply, fallback_reply, free_dialogue_context
+        self.assertIn("처음 만난", free_dialogue_context("explorer", {})["relationship"])
+        for reply in ("다시 뵈니 반갑네요.", "또 만나네요!", "오랜만이에요."):
+            with self.subTest(reply=reply):
+                self.assertEqual(approve_free_reply(reply, "explorer", "smalltalk", {}),
+                                 fallback_reply("explorer", "smalltalk"))
+        self.assertEqual(approve_free_reply("안녕하세요. 발목은 아파도 기분은 좋네요.", "explorer", "smalltalk", {}),
+                         "안녕하세요. 발목은 아파도 기분은 좋네요.")
 
 
 class CharacterInterpretationTest(unittest.TestCase):
