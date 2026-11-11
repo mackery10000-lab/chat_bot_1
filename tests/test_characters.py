@@ -151,6 +151,27 @@ class CharacterDialogueTest(GameTestCase):
         self.assertIn("협조", character_mood("driver", {"year_proven": True}))
 
 
+class ElderTripQuestionTest(GameTestCase):
+    def test_answering_where_the_player_is_going_continues_the_elder_story(self):
+        self.three()
+        self.a("select_npc", "elder")
+        self.assertIn("어디로 가는 길", self.data["reply"])
+        before = deepcopy(self.flags())
+        self.call(value=intent(target="elder", topic="destination"), message="서울로 출장 가는 길이에요.")
+        self.assertIn("그렇구먼", self.data["reply"])
+        self.assertIn("찾고 있었는데", self.data["reply"])
+        self.assertNotIn("표부터 찾아야", self.data["reply"])
+        self.assertFalse(self.flags().get("destination_hint"))
+        self.assertEqual(set(before) - {"elder_met"}, set(self.flags()) - {"elder_met"})
+        self.assertIn("뭘 찾고 계신데요?", [o["label"] for o in self.data["game"]["choices"]])
+
+    def test_question_back_is_not_taken_as_the_players_answer(self):
+        self.three()
+        self.a("select_npc", "elder")
+        self.call(value=intent(target="elder", topic="destination"), message="어르신은 어디로 가세요?")
+        self.assertNotIn("그렇구먼", self.data["reply"])
+
+
 class PlaytestFeedbackTest(GameTestCase):
     def test_explorer_gives_newspaper_whenever_the_disappearance_comes_up(self):
         self.a("inspect", "notice"); self.a("move", "car_2")
@@ -186,6 +207,23 @@ class PlaytestFeedbackTest(GameTestCase):
         self.assertTrue(self.flags()["anomaly_discussed"])
         self.assertIn("저만 이상하게", self.data["reply"])
         self.t("attendant", "permission")
+        self.assertIn("승무원실 문", self.data["reply"])
+
+    def test_attendant_anomaly_answer_is_not_lost_to_free_dialogue_or_stop(self):
+        self.four(); self.a("select_npc", "attendant")
+        gid = self.client.get_cookie(web.COOKIE).value
+        state = self.service.store.get(gid)
+        state["scenario_steps"] = {"attendant": "anomaly"}  # '당신도 이상 현상을 알고 있습니까?' 직후
+        with self.service.store.connect() as db:
+            db.execute("UPDATE games SET state=? WHERE id=?", (json.dumps(state, ensure_ascii=False), gid))
+        free = dict(intent(target="attendant", topic="other"), dialogue_mode="smalltalk")
+        self.call(value=free, message="열차가 계속 달리기만 하고 안 멈춰요.")
+        self.assertTrue(self.flags()["anomaly_discussed"])
+        self.assertIn("저만 이상하게", self.data["reply"])
+        labels = [o["label"] for o in self.data["game"]["choices"]]
+        self.assertNotIn("네.", labels)
+        # 이상 현상을 말한 뒤의 정차 요구는 다시 이상 현상 답으로 바뀌지 않고 부탁으로 이어진다.
+        self.call(value=intent(target="attendant", topic="stop"), message="그러니까 열차를 멈춰야 해요.")
         self.assertIn("승무원실 문", self.data["reply"])
 
     def test_driver_explains_next_station_and_does_not_repeat_acceptance(self):

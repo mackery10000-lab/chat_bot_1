@@ -79,6 +79,7 @@
   text-align: center;
   caret-color: #6B3A16;
   outline: none;
+  -webkit-text-stroke-width:0;
 }
 .station::placeholder { color: rgba(90, 60, 30, 0.42); font-size: 2.4cqw; letter-spacing: 0.2em; }
 .station:focus { background: radial-gradient(ellipse at center, rgba(255, 236, 190, 0.35), transparent 75%); }
@@ -151,6 +152,7 @@
   text-shadow: 0 0.05cqw 0 rgba(255, 240, 210, 0.35);
   transform: rotate(var(--a)) translateY(calc(-69 / 1402 * 100cqw)) rotate(calc(-1 * var(--a)));
   pointer-events: none;
+  -webkit-text-stroke-width:0;
 }
 .dial__digit.is-on { color: #3A1A06; text-shadow: 0 0 0.6cqw rgba(255, 196, 96, 0.9); }
 

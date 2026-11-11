@@ -8,24 +8,19 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 public static class RecordInk {
-    public static int[] Finish(Bitmap image) {
+    public static int[] Bounds(Bitmap image) {
         var rect=new Rectangle(0,0,image.Width,image.Height);
-        var data=image.LockBits(rect,ImageLockMode.ReadWrite,PixelFormat.Format32bppArgb);
+        var data=image.LockBits(rect,ImageLockMode.ReadOnly,PixelFormat.Format32bppArgb);
         int left=image.Width,top=image.Height,right=0,bottom=0;
         try {
             var bytes=new byte[data.Stride*image.Height];
             Marshal.Copy(data.Scan0,bytes,0,bytes.Length);
-            var random=new Random(132026);
             for(int y=0;y<image.Height;y++) for(int x=0;x<image.Width;x++) {
                 int at=y*data.Stride+x*4;
                 if(bytes[at+3]==0) continue;
-                // Mild ribbon wear belongs to the printed ink, never the paper.
-                double wear=random.NextDouble();
-                if(wear<.022) bytes[at+3]=(byte)(bytes[at+3]*.42);
-                else if(wear<.14) bytes[at+3]=(byte)(bytes[at+3]*.78);
+                // Keep every glyph stroke intact; the book supplies the aged texture.
                 if(bytes[at+3]>8) {left=Math.Min(left,x);top=Math.Min(top,y);right=Math.Max(right,x);bottom=Math.Max(bottom,y);}
             }
-            Marshal.Copy(bytes,0,data.Scan0,bytes.Length);
         } finally {image.UnlockBits(data);}
         return new [] {left,top,right+1,bottom+1};
     }
@@ -41,10 +36,6 @@ $staging=Join-Path $root '.local/inventory-record-build'
 $fonts=[Drawing.Text.PrivateFontCollection]::new()
 $fonts.AddFontFile((Join-Path $root 'public/assets/css/NanumMyeongjo-ExtraBold.ttf'))
 $family=$fonts.Families[0]
-$testimonyFonts=[Drawing.Text.PrivateFontCollection]::new()
-$testimonyFonts.AddFontFile((Join-Path $root 'public/assets/css/NanumGothic.ttf'))
-$testimonyFonts.AddFontFile((Join-Path $root 'public/assets/css/NanumGothicBold.ttf'))
-$testimonyFamily=$testimonyFonts.Families[0]
 $ink=[Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(233,47,40,29))
 $muted=[Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(205,65,55,39))
 $rule=[Drawing.Pen]::new([Drawing.Color]::FromArgb(112,78,62,40),1.3)
@@ -97,8 +88,10 @@ function Write-RecordParagraph([string]$text,[double]$y,[double]$size=34,[double
     return (Write-RecordText $text 46 $y 808 $size $leading)+14
 }
 function Write-TestimonyParagraph([string]$text,[double]$y) {
-    $regular=[Drawing.Font]::new($testimonyFamily,34,[Drawing.FontStyle]::Regular,[Drawing.GraphicsUnit]::Pixel)
-    $bold=[Drawing.Font]::new($testimonyFamily,34,[Drawing.FontStyle]::Bold,[Drawing.GraphicsUnit]::Pixel)
+    # Keep testimony in the same printed typeface as every other record.
+    # Clue emphasis changes the weight only, never the font family.
+    $regular=New-RecordFont 34
+    $bold=[Drawing.Font]::new($family,34,[Drawing.FontStyle]::Bold,[Drawing.GraphicsUnit]::Pixel)
     $start=$y;$x=46.0;$line='';$emphasis=[Collections.Generic.List[string]]::new()
     foreach($match in [regex]::Matches($text,'바랜\s*종이|구멍|.')) {
         $part=$match.Value;$highlight=$part -match '^(바랜\s*종이|구멍)$'
@@ -230,7 +223,7 @@ foreach($doc in $documents) {
         }
     }
     $g.Dispose()
-    $bounds=[RecordInk]::Finish($bitmap)
+    $bounds=[RecordInk]::Bounds($bitmap)
     if($bounds[3] -gt 730){$bitmap.Dispose();throw "Printed record exceeds the reserved content area: $filename ($($bounds[3]))"}
     $bitmap.Save((Join-Path $staging $filename),[Drawing.Imaging.ImageFormat]::Png)
     $bitmap.Dispose()
@@ -240,5 +233,5 @@ foreach($doc in $documents) {
 }
 foreach($filename in $rendered){Copy-Item -LiteralPath (Join-Path $staging $filename) -Destination (Join-Path $output $filename)}
 $manifest | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
-$fonts.Dispose();$testimonyFonts.Dispose();$ink.Dispose();$muted.Dispose();$rule.Dispose();$heavyRule.Dispose();$format.Dispose()
+$fonts.Dispose();$ink.Dispose();$muted.Dispose();$rule.Dispose();$heavyRule.Dispose();$format.Dispose()
 Write-Output "Printed $($rendered.Count) records. Book, item and action images were not modified."

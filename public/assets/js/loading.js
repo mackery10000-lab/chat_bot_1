@@ -3,7 +3,14 @@
   'use strict';
   const screen=document.getElementById('scene-loading'),copy=document.getElementById('loading-lore');
   if(!screen||!copy)return;
-  let ready=false,pending=false,lastRequest=-Infinity;
+  const destination=document.getElementById('movement-destination');
+  const shell=document.querySelector('.chat-area');
+  const minimumMovementMs=1000;
+  let ready=false,pending=false,lastRequest=-Infinity,movementStarted=null,previousShellInert=null;
+  function releaseMovement(){
+    movementStarted=null;
+    if(shell&&previousShellInert!==null){shell.inert=previousShellInert;previousShellInert=null;}
+  }
   async function refresh(){
     if(!ready||pending||performance.now()-lastRequest<10000)return;
     pending=true;lastRequest=performance.now();
@@ -19,7 +26,23 @@
     finally{clearTimeout(timer);pending=false;}
   }
   window.TrainLoading={
-    show(show){const opening=show&&screen.hidden;screen.hidden=!show;if(opening)refresh();},
-    setReady(){if(ready)return;ready=true;if(!screen.hidden)refresh();}
+    show(show){
+      const opening=show&&screen.hidden;
+      releaseMovement();
+      screen.hidden=!show;
+      if(show){screen.dataset.mode='loading';screen.setAttribute('aria-label','장면 로딩');}
+      if(opening)refresh();
+    },
+    showMovement(name=''){
+      movementStarted=performance.now();
+      if(shell){if(previousShellInert===null)previousShellInert=shell.inert;shell.inert=true;}
+      if(destination)destination.textContent=name?name+'로 이동합니다.':'';
+      screen.dataset.mode='movement';screen.setAttribute('aria-label','칸 이동 중');screen.hidden=false;
+    },
+    waitForMovement(){
+      if(movementStarted===null)return Promise.resolve();
+      return new Promise(resolve=>setTimeout(resolve,Math.max(0,minimumMovementMs-(performance.now()-movementStarted))));
+    },
+    setReady(){if(ready)return;ready=true;if(!screen.hidden&&screen.dataset.mode!=='movement')refresh();}
   };
 })();

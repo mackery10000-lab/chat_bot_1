@@ -213,7 +213,13 @@ def approved_reaction(reaction, canonical, npc, state=None):
     if not isinstance(reaction, str):
         return ""
     value = reaction.strip()
-    if not value or value in SPEECH_LEADS.get(npc, []):
+    if not value:
+        return ""
+    # '아이고'로 시작하는 서버 대사 앞에 또 '아이고'를 붙이는 식의 중복을 막는다.
+    first = re.match(r"[가-힣A-Za-z]+", value)
+    if first and canonical.lstrip("“\"' ").startswith(first.group()):
+        return ""
+    if value in SPEECH_LEADS.get(npc, []):
         return value
     if "\n" in value or len(value) > REACTION_MAX_LENGTH:
         return ""
@@ -221,10 +227,6 @@ def approved_reaction(reaction, canonical, npc, state=None):
     if len([part for part in re.split(r"[.!?。！？…]+", value) if part.strip()]) > 1:
         return ""
     if approve_free_reply(value, npc, "smalltalk", state or {}) != value:
-        return ""
-    # '아이고'로 시작하는 서버 대사 앞에 또 '아이고'를 붙이는 식의 중복을 막는다.
-    first = re.match(r"[가-힣A-Za-z]+", value)
-    if first and canonical.lstrip("“\"' ").startswith(first.group()):
         return ""
     if value.rstrip(".!?…") in canonical:
         return ""

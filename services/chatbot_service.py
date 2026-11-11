@@ -22,6 +22,13 @@ from .dialogue_policy import (
 )
 
 BASE_DIR = Path(__file__).resolve().parents[1]
+# 승무원의 '무슨 이상을 보셨습니까?'에 대한 관찰 답. 정차 요구('멈춰 주세요')와 달리 현상 서술이다.
+ANOMALY_OBSERVATION = (
+    r"(?:안|못)\s*멈|멈추(?:지|질)\s*(?:않|안|못)|멈출\s*생각|서지\s*(?:않|안)|정차(?:하지|를\s*안|\s*안)|"
+    r"계속\s*(?:달리|가|돌|움직)|끝없이|도착(?:하지|을\s*안|\s*안|할\s*때가)|"
+    r"반복|되풀이|순환|맴돌|같은\s*(?:곳|구간|풍경|터널|다리|철교|선로)|(?:터널|다리|철교).{0,10}(?:또|다시)|"
+    r"시계.{0,10}(?:멈|안\s*가)|시간.{0,8}(?:멈|안\s*가|그대로)"
+)
 LOCATIONS = {
     "car_1": "1호차",
     "car_2": "2호차",
@@ -546,7 +553,8 @@ class GameEngine:
         f = s["flags"]
         turns = s.setdefault("npc_turns", {})
         turns[npc] = turns.get(npc, 0) + 1
-        if npc == "attendant" and s["pending_dialogue"] == "why_engine" and topic in ("stop", "warning"):
+        if (npc == "attendant" and topic in ("stop", "warning") and not s["flags"].get("anomaly_discussed")
+                and self._awaiting_anomaly(s)):
             # '무슨 이상을 봤냐'는 질문에 '열차가 안 멈춘다'고 답하면 반복 관찰을 말한 것이다.
             topic = "loop"
         profile_reply = character_reply(npc, topic)
@@ -561,7 +569,7 @@ class GameEngine:
         if npc == "explorer":
             self.mark(s, "explorer_met")
             if topic in ("greeting", "other") and intent["intent"] != "accept":
-                return self.result("안녕하세요. 저는 이 열차를 조사하러 온 탐험가예요. 이런 곳에서 사람을 만나니 더 흥미롭잖아요? 당신은 여기에 왜 있죠?", npc)
+                return self.result("안녕하세요. 저는 이 열차를 조사하러 온 탐험가예요. 이런 곳에서 사람을 만나다니, 반갑네요. 당신은 여기에 왜 있죠?", npc)
             if not f.get("explorer_case_known") and topic in ("identity", "case", "loop", "destination", "year"):
                 self.mark(
                     s, "explorer_case_known", "탐험가는 2016년 실종된 13-Fri를 조사해 왔다."
@@ -860,7 +868,12 @@ class GameEngine:
                 )
             if topic == "loop":
                 self.mark(s, "anomaly_discussed")
-                s["pending_dialogue"] = "why_engine"
+                # 이상 현상 질문에 답했으므로 같은 질문 단계(선택지 '네.')에 머물지 않는다.
+                s["pending_dialogue"] = ""
+                # 'entry'로 돌려두면 _scenario_stage가 플래그로 need/accept 단계를 고른다.
+                stage = s.setdefault("scenario_steps", {}).get(npc, "entry")
+                if stage in ("where", "stop", "anomaly"):
+                    s["scenario_steps"][npc] = "entry"
                 return self.result(
                     "역시 저만 이상하게 느낀 것이 아니었군요. 운행 시간이 한참 지났는데도 도착하지 않고 있습니다. 하지만 규정상 승객을 기관실에 들여보낼 수는 없습니다.",
                     npc,
@@ -1128,7 +1141,7 @@ class GameEngine:
                 )
             s["attempts"] = 0
             if (
-                c["destination"] != "아지산역"
+                c["destination"] not in ("아지산", "아지산역")
                 or c["password"] != "2026"
             ):
                 return self.bad(
@@ -1537,6 +1550,8 @@ class GameEngine:
                     return self.result(
                         "손전등은 가지고 있다. 이곳에서는 객차의 시야를 바꿀 필요가 없다."
                     )
+                if s["flags"].get("light_on"):
+                    return self.result("손전등은 이미 켜져 있다. 밝아진 3호차를 조사해 보자.")
                 self.mark(
                     s,
                     "light_on",
@@ -1569,7 +1584,61 @@ class GameEngine:
             return self.hint(s)
         raise GameError("조작을 확인하지 못했습니다.")
 
+    def _awaiting_anomaly(self, s):
+        """승무원이 '무슨 이상을 봤냐'고 물어 답을 기다리는 중인지."""
+        return s["npc"] == "attendant" and not s["flags"].get("anomaly_discussed") and (
+            s["pending_dialogue"] == "why_engine"
+            or self._scenario_stage(s, "attendant") in ("stop", "anomaly")
+        )
+
+    def _answer_elder_trip_question(self, s, i):
+        """노인의 '자네는 어디로 가는 길이고?'에 플레이어가 행선지를 답한 경우.
+
+        플레이어의 행선지는 게임 사실이 아니므로 받아주기만 하고, 노인 자신의
+        목적지 단서(destination_hint)나 아이템은 건드리지 않는다.
+        """
+        if s["npc"] != "elder" or "elder" not in self.available_npcs(s):
+            return None
+        if i.get("intent") not in ("talk", "accept", "unknown") or i.get("mode") in ("hypothesis", "reported"):
+            return None
+        last = next((h for h in reversed(s["history"])
+                     if h.get("role") == "npc" and h.get("npc") == "elder"), None)
+        if not last or "어디로 가는 길" not in (last.get("record") or last.get("text", "")):
+            return None
+        quote = i.get("quote", "").strip()
+        if not quote or re.search(r"[?？]|(?:나요|까요|가요\?|어디|뭐|무엇|왜|누구|언제|어떻게)", quote):
+            return None
+        f = s["flags"]
+        unknown = bool(re.search(r"모르|몰라|기억.{0,6}(?:안|않|없)", quote))
+        trip = re.search(
+            r"(?:가는|가던|갈)\s*(?:길|중)|가(?:요|려고|려구|는\s*중)|갑니다|향하|출장|여행|퇴근|귀가|"
+            r"집(?:에|으로)|역(?:으로|에|까지)|(?:으)?로\s*가", quote)
+        if not trip and not (unknown and i.get("topic") in ("destination", "other", "greeting")):
+            # '열차를 멈추고 싶어요' 같은 다른 이야기는 원래 주제대로 처리한다.
+            return None
+        if unknown and not trip:
+            line = "아이고, 자네도 모르는가. 나도 어디로 가던 길이었는지 영 생각이 안 나네."
+        else:
+            line = "아이고, 그렇구먼. 나는 어디로 가던 길이었는지 영 생각이 안 나네."
+        if self._scenario_stage(s, "elder") == "entry":
+            # 선택지 '괜찮으세요?/여기서 뭘 하고 계세요?'와 같은 다음 단계로 이어 준다.
+            line += " 아까부터 뭔가를 찾고 있었는데, 불까지 꺼져 버렸지 뭔가."
+            s.setdefault("scenario_steps", {})["elder"] = "search"
+        elif not f.get("ticket_returned"):
+            line += " 승차권을 보면 알 텐데, 커피를 쏟고 나서 표가 안 보이네."
+        self.mark(s, "elder_met")
+        return self.result(line, "elder", ["elder_lost"])
+
     def apply_intent(self, s, i):
+        trip = self._answer_elder_trip_question(s, i)
+        if trip:
+            return trip
+        if (self._awaiting_anomaly(s) and i.get("mode") not in ("negated", "hypothesis", "reported")
+                and i.get("intent") in ("talk", "accept", "unknown", "describe", "impossible", "ambient")
+                and re.search(ANOMALY_OBSERVATION, i.get("quote", ""))):
+            # 이상 현상 질문에 대한 관찰 답('열차가 안 멈춰요')은 자유 대화나 정차 요구로 새지 않게 한다.
+            i = dict(i, intent="talk", target="attendant", recipient="", topic="loop", mode="act",
+                     dialogue_mode="scenario", dialogue_choice_id="")
         kind = i["intent"]
         mode = i["mode"]
         target = i["target"]
