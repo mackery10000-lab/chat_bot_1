@@ -1976,7 +1976,7 @@ class ChatbotService:
                     reply = self.generator.generate(
                         message, s["username"], character, knowledge
                     )
-                    reply = approved_reply(reply, canonical, npc)
+                    reply = approved_reply(reply, canonical, npc, s)
                 sources = [k.title for k in knowledge]
             if npc:
                 s["expression"] = result["ui"].get("reaction", self.expression(s, npc, canonical))

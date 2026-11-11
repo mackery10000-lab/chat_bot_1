@@ -213,6 +213,47 @@ class PlaytestFeedbackTest(GameTestCase):
                          "안녕하세요. 발목은 아파도 기분은 좋네요.")
 
 
+class ScenarioReactionTest(GameTestCase):
+    def test_reaction_sentence_is_kept_only_when_it_adds_no_facts(self):
+        from services.generator import approved_reply
+        canonical = "역시 저만 이상하게 느낀 것이 아니었군요."
+        good = "열차가 안 멈춘다고요?"
+        self.assertEqual(approved_reply(good + "\n" + canonical, canonical, "attendant", {}), good + "\n" + canonical)
+        rejected = (
+            "승차권은 제가 확인했습니다.",          # 진행 단어와 상태 주장
+            "2026년이라니 놀랍네요.",              # 인식 연도 밖의 숫자
+            "그렇군요. 정말 이상하네요.",           # 두 문장
+            "다시 뵈니 반갑습니다.",               # 재회 표현
+            "그 말씀을 들으니 " + "정말 " * 30 + "놀랍네요.",  # 너무 긺
+            "역시 저만 이상하게 느낀 것이 아니었군요.",  # 서버 대사 반복
+        )
+        for reaction in rejected:
+            with self.subTest(reaction=reaction):
+                self.assertEqual(approved_reply(reaction + "\n" + canonical, canonical, "attendant", {}), canonical)
+        elder = "아이고, 반갑소."
+        self.assertEqual(approved_reply("아이고 놀랐네.\n" + elder, elder, "elder", {}), elder)
+        # 서버 대사를 바꿔 쓴 답은 반응과 상관없이 원문으로 되돌린다.
+        self.assertEqual(approved_reply(good + "\n역시 그렇군요.", canonical, "attendant", {}), canonical)
+
+    def test_reaction_reaches_the_player_but_history_keeps_server_line(self):
+        self.four(); self.a("select_npc", "attendant")
+        self.t("attendant", "permission")
+        reaction = "열차가 안 멈춘다고요?"
+        original = self.model.generate
+
+        def react(question, username, character, knowledge):
+            return reaction + "\n" + original(question, username, character, knowledge)
+
+        with patch.object(self.model, "generate", side_effect=react):
+            self.call(value=intent(target="attendant", topic="loop"), message="열차가 안 멈춰요.")
+        self.assertTrue(self.data["reply"].startswith(reaction + "\n"))
+        self.assertTrue(self.flags()["anomaly_discussed"])
+        state = self.service.store.get(self.client.get_cookie(web.COOKIE).value)
+        last = state["history"][-1]
+        self.assertEqual(last["text"], self.data["reply"])
+        self.assertTrue(last["record"].startswith("역시 저만"))
+
+
 class CharacterInterpretationTest(unittest.TestCase):
     def test_background_and_injury_do_not_match_unrelated_story_choices(self):
         for message, topic in (("왜 이 열차에 타셨나요?", "background"),
