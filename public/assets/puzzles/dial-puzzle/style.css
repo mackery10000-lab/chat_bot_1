@@ -73,8 +73,10 @@
   padding: 0 4%;
   border: 0;
   background: transparent;
-  font: 400 4.2cqw/1 var(--font-plate);
-  letter-spacing: 0.12em;
+  font: 400 4.2cqw/1.2 var(--font-ui);
+  letter-spacing: 0;
+  appearance: none;
+  -webkit-appearance: none;
   color: var(--ink);
   text-align: center;
   caret-color: #6B3A16;

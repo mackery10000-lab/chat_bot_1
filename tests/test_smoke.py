@@ -1683,7 +1683,7 @@ class RegisteredSceneTest(GameTestCase):
     def test_scene_ratio_and_interactions_match_supplied_backgrounds(self):
         gid = self.client.get_cookie(web.COOKIE).value
         state = self.service.store.get(gid)
-        state["flags"].update(light_on=True, mission_accepted=True, door_open=True)
+        state["flags"].update(light_on=True, mission_accepted=True, manual_read=True, door_open=True)
         expected = {"car_1": {"notice", "window"}, "car_4": {"crew_door", "inspection_cover", "door_handle"},
                     "crew": {"report"}, "engine": {"control", "engine_lever"}}
         for location in ("car_1", "car_2", "car_3", "car_4", "crew", "engine"):
@@ -1707,7 +1707,7 @@ class DoorNavigationTest(GameTestCase):
         state["npc"] = ""
         state["flags"].update(
             notice_read=True, supplies_received=True, light_on=True,
-            ticket_recovered=True, ticket_returned=True, destination_hint=True,
+            ticket_recovered=True, ticket_returned=True, destination_hint=True, manual_read=True,
             mission_accepted=True, cover_open=True, lever_down=True, door_open=True,
             report_read=True, engine_permission=False,
         )

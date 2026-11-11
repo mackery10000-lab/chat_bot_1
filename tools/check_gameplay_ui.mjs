@@ -195,7 +195,10 @@ try {
  };
  const finishVideo=async()=>{
   const remaining=await evaluate(`Math.max(0,document.querySelector('#cinematic-video').duration-document.querySelector('#cinematic-video').currentTime)`);
-  await wait(`window.__qaVideoEnded`,'video reaches its natural ended event',Math.ceil(remaining*1000)+15000);
+  const kind=await evaluate(`document.querySelector('#cinematic').dataset.kind`);
+  // A final-frame check or media fallback may finish before native "ended".
+  // Verify the player's next screen instead of depending on that one event.
+  await wait(`!document.querySelector('#cinematic').open&&(${JSON.stringify(kind)}==='opening'||(document.querySelector('#overlay').open&&document.querySelector('#overlay').dataset.view==='ending-complete'&&!!document.querySelector('#ending-restart')))`,'cinematic reaches its next screen',Math.ceil(remaining*1000)+15000);
  };
  const openingChecks=async()=>{
   await cinematicReady('opening','opening.mp4');

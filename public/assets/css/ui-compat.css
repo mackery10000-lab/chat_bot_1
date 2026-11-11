@@ -1,0 +1,20 @@
+/* Used only where the corresponding native browser feature is unavailable. */
+dialog:not([open]){display:none}
+.train-map-bar.rolling .train-map-panel{pointer-events:none}
+.dialog-backdrop-fallback{position:fixed;inset:0;background:#080705e6;backdrop-filter:blur(5px)}
+dialog.dialog-fallback[open]{display:block;position:fixed;inset:0;margin:auto;max-width:96vw;max-height:94vh;overflow:auto}
+.cinematic-dialog.dialog-fallback[open]{width:100vw;height:100vh;max-width:none;max-height:none;overflow:hidden}
+.no-dynamic-viewport .chat-page{height:100vh}
+.no-dynamic-viewport .chat-page .scene-loading{height:100vh}
+.no-dynamic-viewport .chat-page .game-dialog.ending-dialog{width:min(720px,96vw,calc(92vh * 1.5))}
+.no-dynamic-viewport .chat-page .hints-and-choices{max-height:24vh}
+.no-container-units .chat-page .ending-dialog .ending-result{font:400 clamp(26px,7.2vw,56px)/1.15 var(--font)}
+.no-container-units .chat-page .ending-dialog .overlay-header h2{font:400 clamp(20px,5.2vw,40px)/1.35 var(--font)}
+.no-container-units .ending-dialog .ending-complete p{font-size:clamp(12px,2.5vw,18px)}
+.no-container-units .ending-dialog #ending-restart{font:400 clamp(12px,2.25vw,16px)/1.4 var(--font);min-height:32px}
+.no-container-units .chat-page .train-map-bar{--scroll-knob:22px}
+.no-container-units .chat-page .map-roll-edge{height:12px}
+.no-aspect-ratio .chat-page .game-dialog.ending-dialog{height:auto}
+.no-aspect-ratio .ending-dialog::before{content:'';display:block;padding-top:66.666667%}
+.chat-page .ending-dialog.ending-art-failed{background:#ddc8a3}
+.chat-page .ending-dialog.ending-art-failed[data-ending=bad]{background:#242320}

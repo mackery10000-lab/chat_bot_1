@@ -7,15 +7,11 @@ html:has(.scene-loading:not([hidden])){overflow:hidden;scrollbar-gutter:auto}
 .loading-eye .loading-gear{transform-origin:32px 32px;animation:loading-turn 10s linear infinite}
 .loading-indicator>span{font:400 14px/1.5 var(--font);color:#8e908f;letter-spacing:.03em}
 .movement-passage,.movement-status{display:none}
-.scene-loading[data-mode="movement"]{background:radial-gradient(ellipse at 50% 42%,#1d1c18 0,#080a0a 48%,#020303 85%);color:#d9d3c3}
-.scene-loading[data-mode="movement"] .loading-lore,.scene-loading[data-mode="movement"] .loading-indicator{display:none}
-.scene-loading[data-mode="movement"] .movement-passage{display:block;position:absolute;inset:0;overflow:hidden;opacity:.8}
 .movement-doorway{position:absolute;left:50%;top:42%;width:clamp(120px,18vmin,220px);height:clamp(170px,28vmin,340px);transform:translate(-50%,-50%);border:5px solid #272722;box-shadow:0 0 0 2px #0b0c0b,inset 0 0 28px #000,0 0 65px #000;background:linear-gradient(90deg,#111413 48.8%,#8c8c71 49.5%,#bbb69c 50%,#656959 50.5%,#111413 51.2%)}
 .movement-doorway:before,.movement-doorway:after{content:"";position:absolute;top:40%;width:8px;height:27px;border:1px solid #5e5d4e;background:#232620}
 .movement-doorway:before{right:56%}.movement-doorway:after{left:56%}
 .movement-doorway>span{position:absolute;inset:8% 12% 42%;border:2px solid #36392e;background:linear-gradient(90deg,#050807,#17201b 50%,#050807);opacity:.65}
 .movement-rails{position:absolute;left:15%;right:15%;top:59%;height:50%;transform:perspective(250px) rotateX(58deg);transform-origin:center top;background:repeating-linear-gradient(0deg,transparent 0 30px,#b7ac7b15 31px 33px,transparent 34px 70px);animation:movement-rails .8s linear infinite;mask-image:linear-gradient(transparent,#000 25%,transparent 90%)}
-.scene-loading[data-mode="movement"] .movement-status{display:block;position:absolute;left:20px;right:20px;top:67%;text-align:center}
 .movement-label{margin:0;font:700 clamp(20px,2.5vmin,29px)/1.6 var(--font);letter-spacing:.1em;color:#e1dbcb}
 .movement-destination{margin:8px 0 0;font:700 clamp(13px,1.6vmin,17px)/1.7 var(--font);color:#aaa695;word-break:keep-all}
 @keyframes movement-rails{to{background-position:0 70px}}

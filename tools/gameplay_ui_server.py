@@ -55,9 +55,16 @@ def seed():
         state['location']='engine'
         state['flags'].update(engine_permission=True,driver_explained=phase in ('proof','control'),year_claimed=phase in ('proof','control'),year_proven=phase=='control')
     elif phase=='crew': state['location']='crew'
-    elif phase in ('car4','door'):
+    elif phase in ('car4','door','door_read'):
         state['location']='car_4'
-        if phase=='door': state['flags']['door_open']=False
+        if phase in ('door','door_read'): state['flags']['door_open']=False
+        if phase=='door_read': state['flags']['manual_read']=True
+    elif phase=='transcript':
+        state.update(location='car_2',npc='explorer')
+        state['history']=[entry for index in range(150) for entry in (
+            dict(role='user',speaker=state['username'],npc='explorer',text=f'이전 대화 {index+1}'),
+            dict(role='npc',speaker='탐험가',npc='explorer',text=f'탐험가의 대답 {index+1}'),
+        )]
     elif phase=='dark': state['flags']['light_on']=False
     elif phase=='full': state['flags']['destination_hint']=True
     elif phase=='early': state['flags']['elder_features']=False

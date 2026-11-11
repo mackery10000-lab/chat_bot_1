@@ -6,6 +6,7 @@
   <title>운행 종료 불가 · NO LAST STOP</title>
   <link rel="stylesheet" href="{{ asset_url('assets/start/style.css') }}">
   <link rel="stylesheet" href="{{ asset_url('assets/start/entry-art.css') }}">
+  <link rel="stylesheet" href="{{ asset_url('assets/css/ui-compat.css') }}">
 </head>
 <body>
   <div class="screen">
@@ -81,7 +82,7 @@
       <!-- 나레이션 (타자 효과) -->
       <p class="narration">
         <span class="sr-only" id="narration-full"></span>
-        <span aria-hidden="true"><span id="line1"></span><br><span id="line2"></span><span class="caret fx"></span></span>
+        <span aria-hidden="true"><span id="line1">평범한 출장길이었다.</span><br><span id="line2">적어도, 그 열차에 오르기 전까지는...</span><span class="caret fx"></span></span>
       </p>
 
       <!-- 승차권 버튼 -->
@@ -146,6 +147,7 @@
     </form>
   </dialog>
 
+  <script src="{{ asset_url('assets/js/ui-runtime.js') }}"></script>
   <script src="{{ asset_url('assets/js/audio.js') }}"></script>
   <script src="{{ asset_url('assets/start/settings.js') }}"></script>
   <script src="{{ asset_url('assets/start/entry-motion.js') }}"></script>

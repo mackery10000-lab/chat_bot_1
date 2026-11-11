@@ -13,6 +13,7 @@
  <link rel="preload" as="image" href="{{ asset_url('assets/images/ui/ending-certificate.png') }}">
  <link rel="preload" as="image" href="{{ asset_url('assets/images/ui/ending-certificate-sad.png') }}">
  <link rel="preload" as="image" href="{{ asset_url('assets/images/ui/train-route-lights-off.webp') }}">
+ <link rel="preload" as="image" href="{{ asset_url('assets/images/ui/train-route-no-icons.png') }}">
  <link rel="preload" as="image" href="{{ asset_url('assets/images/inventory/book-overview.png') }}">
  <link rel="preload" as="image" href="{{ asset_url('assets/images/inventory/book-detail.png') }}">
  <link rel="preload" as="image" href="{{ asset_url('assets/images/inventory/photo-mount.png') }}">
@@ -22,6 +23,9 @@
  <link rel="stylesheet" href="{{ asset_url('assets/css/train-map.css') }}">
  <link rel="stylesheet" href="{{ asset_url('assets/css/loading.css') }}">
  <link rel="stylesheet" href="{{ asset_url('assets/css/viewport.css') }}">
+ <link rel="stylesheet" href="{{ asset_url('assets/css/conversation.css') }}">
+ <link rel="stylesheet" href="{{ asset_url('assets/css/ui-compat.css') }}">
+ <script src="{{ asset_url('assets/js/ui-runtime.js') }}" defer></script>
  <script src="{{ asset_url('assets/js/audio.js') }}" defer></script>
  <script src="{{ asset_url('assets/js/puzzles.js') }}" defer></script>
  <script src="{{ asset_url('assets/js/loading.js') }}" defer></script>
@@ -78,6 +82,8 @@
  </div>
 
  <section class="conversation-console" aria-label="인물과 대화" hidden>
+  <div id="conversation-history" class="conversation-history" role="region" aria-label="전체 대화 기록" tabindex="0"></div>
+  <button type="button" id="latest-message" class="latest-message" hidden>새 대화 · 아래로 이동 ↓</button>
   <div class="console-main">
    <section id="hints-and-choices" class="hints-and-choices" aria-label="행동 선택지와 요청한 힌트">
     <div id="choice-list" class="choice-list" aria-label="선택지" hidden></div>

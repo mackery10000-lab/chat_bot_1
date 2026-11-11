@@ -64,7 +64,7 @@ class DemoImageSelector:
             if location == "car_1":
                 registered("car1.notice")
                 registered("car1.window")
-            elif location == "car_4" and flags.get("mission_accepted") and not door_available:
+            elif location == "car_4" and flags.get("mission_accepted") and flags.get("manual_read") and not door_available:
                 registered("crew-door.crew_door")
                 registered("crew-door.inspection_cover")
                 registered("crew-door.door_handle")

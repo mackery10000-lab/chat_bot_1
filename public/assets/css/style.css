@@ -1,6 +1,10 @@
 @font-face{font-family:TrainKorean;src:url('./NanumGothic.ttf') format('truetype');font-weight:400;font-display:swap}@font-face{font-family:TrainKorean;src:url('./NanumGothicBold.ttf') format('truetype');font-weight:700;font-display:swap}
 @font-face{font-family:RenaissanceText;src:url('./OG-Renaissance-Secret.ttf') format('truetype');font-weight:100 900;font-style:normal;font-display:swap}
+
+@font-face{font-family:GounBatang;src:url('./GowunBatang-Regular.woff') format('woff');font-weight:normal;font-display:swap}
+
 @font-face{font-family:GounBatang;src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2108@1.1/GowunBatang-Regular.woff') format('woff');font-weight:normal;font-display:swap}
+
 :root{color-scheme:dark;--ink:#161411;--deep:#0c0c0b;--panel:#201d18;--brass:#ad8951;--line:#665039;--paper:#ded0ad;--paper-ink:#393024;--cream:#e7dbc3;--muted:#a89a82;--red:#7b302d;--font:RenaissanceText,TrainKorean,'Malgun Gothic',sans-serif;--renaissance-stroke:.03em}
 /* RenaissanceText ships one static weight, so an outline thickens it. Rules that switch fonts reset the stroke to 0. */
 body{-webkit-text-stroke-width:var(--renaissance-stroke)}

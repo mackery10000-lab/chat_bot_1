@@ -1910,12 +1910,18 @@ class GameEngine:
                     "speaker": "차내",
                     "text": self.config["greeting"],
                 },
+                *s.get("history_archive", []),
                 *s["history"],
             ],
             "objective": self.objective(s),
             "confirmation": deepcopy(s["confirmation"]),
+            "testimony_hint": (
+                loc == "car_3" and s["npc"] == "cleaner"
+                and s["pending_dialogue"] in ("describe_ticket", "confirm_description")
+                and not f.get("ticket_recovered") and "elder_testimony" in s["inventory"]
+            ),
             "bag_hint": (loc == "car_3" and not f.get("light_on"))
-            or (loc == "car_4" and f.get("mission_accepted") and not f.get("door_open"))
+            or (loc == "car_4" and f.get("mission_accepted") and not f.get("manual_read"))
             or (
                 loc == "engine"
                 and f.get("driver_explained")
@@ -1923,7 +1929,7 @@ class GameEngine:
                 and not f.get("year_proven")
             ),
             "controls": {
-                "door": loc == "car_4" and bool(f.get("mission_accepted")),
+                "door": loc == "car_4" and bool(f.get("mission_accepted")) and bool(f.get("manual_read")),
                 "proof": loc == "engine"
                 and bool(f.get("driver_explained"))
                 and bool(f.get("year_claimed"))
@@ -2117,6 +2123,10 @@ class ChatbotService:
                     "record": canonical if npc and canonical != reply else "",
                     "dialogue_mode": dialogue_mode or "scenario",
                 })
+            # Archive only the overflow for the UI; scenario logic and model
+            # context continue using the same recent 240 entries as before.
+            if len(s["history"]) > 240:
+                s.setdefault("history_archive", []).extend(s["history"][:-240])
             s["history"] = s["history"][-240:]
             s["revision"] = old_revision + 1
             response = self.snapshot_from(s)

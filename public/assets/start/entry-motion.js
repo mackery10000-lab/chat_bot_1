@@ -61,11 +61,11 @@
     }else{settle();return;}
     raf=requestAnimationFrame(tick);
   }
-  new ResizeObserver(measure).observe(frame);
+  if(window.ResizeObserver)new ResizeObserver(measure).observe(frame);else window.addEventListener('resize',measure);
   measure();
   if(quiet())settle();else raf=requestAnimationFrame(tick);
   const onPreference=()=>{if(quiet())settle();};
-  reduced.addEventListener('change',onPreference);
+  if(reduced.addEventListener)reduced.addEventListener('change',onPreference);else reduced.addListener(onPreference);
   new MutationObserver(onPreference).observe(document.documentElement,{attributes:true,attributeFilter:['class']});
   window.addEventListener('pagehide',()=>{cancelAnimationFrame(raf);raf=0;});
   window.addEventListener('pageshow',event=>{
