@@ -385,6 +385,11 @@ class DemoGenerator:
             max_output_tokens=max_output_tokens or (1200 if schema else 900),
             store=False,
         )
+        
+        if model.strip() == "gpt-6-luna":
+            effort = os.getenv("OPENAI_REASONING_EFFORT") or values.get("OPENAI_REASONING_EFFORT") or "none"
+            options["reasoning"] = {"effort": effort}
+  
         if model.strip().startswith(("gpt-4o", "gpt-4.1")):
             options["temperature"] = 0 if schema else 0.4
         if schema:
