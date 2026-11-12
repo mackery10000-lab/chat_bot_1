@@ -48,39 +48,6 @@
                                    ],
                         "render_mode":  "background"
                     },
-    "car1.window":  {
-                        "image":  "/assets/images/scenes/car1-window.png",
-                        "background":  "/assets/images/car1/background.png",
-                        "size":  [
-                                     1403,
-                                     1121
-                                 ],
-                        "polygon":  [
-                                        [
-                                            19.244476,
-                                            47.457627
-                                        ],
-                                        [
-                                            22.523165,
-                                            47.011597
-                                        ],
-                                        [
-                                            22.879544,
-                                            57.091882
-                                        ],
-                                        [
-                                            19.101924,
-                                            57.716325
-                                        ]
-                                    ],
-                        "bounds":  [
-                                       19.101924447612259,
-                                       47.01159678858162,
-                                       3.7776193870277974,
-                                       10.704727921498662
-                                   ],
-                        "render_mode":  "background"
-                    },
     "car2.explorer":  {
                           "image":  "/assets/images/scenes/car2-explorer.png",
                           "background":  "/assets/images/car1/background.png",

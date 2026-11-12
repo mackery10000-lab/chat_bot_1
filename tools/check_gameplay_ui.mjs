@@ -19,6 +19,7 @@ const cleanerItemsOnly = process.argv.includes('--cleaner-items-only');
 const interfaceOnly = process.argv.includes('--interface-only');
 const presentationOnly = process.argv.includes('--presentation-only');
 const windowMapOnly = process.argv.includes('--window-map-only');
+const windowRemovalOnly = process.argv.includes('--window-removal-only');
 const entryOnly = process.argv.includes('--entry-only');
 const entryArtOnly = process.argv.includes('--entry-art-only');
 const out = path.join(root, '.local', 'gameplay-ui-qa', String(Date.now()));
@@ -678,16 +679,25 @@ try {
    await check('ending image preserves transparent wear '+kind,`(()=>{const i=document.querySelector('.ending-card-art'),c=document.createElement('canvas');c.width=i.naturalWidth;c.height=i.naturalHeight;const g=c.getContext('2d');g.drawImage(i,0,0);const center=g.getImageData(768,512,1,1).data;return ${kind==='bad'?'Math.max(...center.slice(0,3))-Math.min(...center.slice(0,3))<12&&g.getImageData(53,620,1,1).data[3]<30':'center[0]-center[2]>25'};})()`);
   }
  }
- if(windowMapOnly){
+ if(windowMapOnly&&windowRemovalOnly){
+  for(const [width,height] of [[1440,900],[390,844]]){
+   await viewport(width,height);await seed('feedback');
+   await check('car 1 exposes only its notice before unlocking '+width,"fetch('/api/game').then(r=>r.json()).then(d=>d.game.location.id==='car_1'&&d.scene.hotspots.length===1&&d.scene.hotspots[0].target==='notice'&&!document.querySelector('[data-hotspot=\"window\"],.window-video-view'))");
+   await check('removed window art and media are never requested '+width,"performance.getEntriesByType('resource').every(r=>!/(?:car1-window|train-window-frame|car1\\/window)/.test(r.name))");
+   await snapshot('window-removed-'+width);
+   await click('[data-hotspot="notice"]');await ready();await images();
+   await check('notice still opens and unlocks car 2 '+width,"document.querySelector('#overlay').open&&document.querySelector('#overlay').dataset.view==='notice'&&document.querySelector('.notice-art-view img').naturalWidth>0");
+   await click('#close-overlay');
+   await click('[data-hotspot="door_to_car_2"]');await ready();
+   await check('car 2 remains reachable after removing the window '+width,"fetch('/api/game').then(r=>r.json()).then(d=>d.game.location.id==='car_2')");
+  }
+ }
+ if(windowMapOnly&&!windowRemovalOnly){
   const dimensions=()=>evaluate("['.scene-frame','#scene-image','.scene-top','#menu-btn','#bag-btn'].map(s=>{const r=document.querySelector(s).getBoundingClientRect();return {width:r.width,height:r.height};})");
   const sameSizes=(a,b)=>a.every((box,i)=>Math.abs(box.width-b[i].width)<1&&Math.abs(box.height-b[i].height)<1);
   const mapSettled=()=>wait("!document.querySelector('.train-map-bar').classList.contains('rolling')&&document.querySelector('#train-map-panel').getAnimations().length===0",'paper roller settles');
   const mapState=closed=>"(()=>{const p=document.querySelector('#train-map-panel'),t=document.querySelector('#map-toggle');return p.inert==="+closed+"&&p.getAttribute('aria-hidden')==='"+closed+"'&&p.classList.contains('is-closed')==="+closed+"&&t.getAttribute('aria-expanded')==='"+!closed+"'&&localStorage.getItem('train_map_closed')==='"+closed+"'&&"+(closed?"p.getBoundingClientRect().height<1":"p.getBoundingClientRect().height>1")+";})()";
   const mapArtFits=()=>evaluate("(()=>{const b=document.querySelector('.train-map-bar').getBoundingClientRect(),t=document.querySelector('#map-toggle').getBoundingClientRect(),c=document.querySelector('.train-map-canvas').getBoundingClientRect(),s=document.querySelector('.scene-frame').getBoundingClientRect(),i=document.querySelector('.train-map-art'),r=i.getBoundingClientRect(),roller=getComputedStyle(document.querySelector('#map-toggle')).backgroundImage;return Math.abs(b.left-s.left)<1&&Math.abs(b.width-s.width)<1&&Math.abs(t.height-Math.min(44,Math.max(30,innerWidth*.04)))<1&&Math.abs(c.width/c.height-3)<.01&&Math.abs(r.width/r.height-3)<.01&&i.naturalWidth===2172&&i.naturalHeight===724&&i.getAttribute('src')==='/assets/images/ui/train-route-six-cars.png'&&['scroll-knob-left.svg','scroll-knob-right.svg','scroll-band.svg'].every(name=>roller.includes(name))&&[...document.querySelectorAll('.train-map-lights-off')].every(el=>el.tagName==='IMG'&&el.complete&&el.naturalWidth===2172&&el.naturalHeight===724&&el.getAttribute('src')==='/assets/images/ui/train-route-lights-off.webp')&&!document.querySelector('.map-heading,.map-caption,.stop-state')&&document.documentElement.scrollWidth<=innerWidth;})()");
-  const windowReady=()=>wait("document.querySelector('#overlay').open&&document.querySelector('#overlay').dataset.view==='window'&&document.querySelector('.window-frame-art')?.complete&&document.querySelector('.window-frame-art').naturalWidth>0&&document.querySelector('.window-aperture video')?.readyState>=2&&!document.querySelector('.window-aperture video').paused",'live train window');
-  const retainWindow=()=>evaluate("window.__qaOldWindow=document.querySelector('.window-aperture video');true");
-  const windowReleased=()=>wait("!document.querySelector('#overlay').open&&window.__qaOldWindow?.paused&&!window.__qaOldWindow.hasAttribute('src')&&![...window.__qaOldWindow.querySelectorAll('source')].some(s=>s.hasAttribute('src'))&&window.__qaOldWindow.readyState===0",'closed window releases its media');
-  const escape=async()=>{await call('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});await call('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});};
   await call('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'no-preference'}]});
   for(const [width,height] of [[1440,900],[1920,1080],[1024,768],[390,844],[320,568],[844,390]]){
    const size=width+'x'+height;
@@ -721,19 +731,9 @@ try {
    await check('folding preserves scene and HUD dimensions '+size,sameSizes(openDimensions,await dimensions()));
    await click('#map-toggle');await mapSettled();await check('reopening restores the complete native sheet '+size,mapState(false));
    await check('map animation does not commit a game turn '+size,await evaluate("fetch('/api/game').then(r=>r.json()).then(d=>d.game.revision)")===revision);
-   await click('[data-hotspot="window"]');await ready();await windowReady();
-   await check('window is a native-ratio frame without paper or internal scrolling '+size,"(()=>{const d=document.querySelector('#overlay'),r=d.getBoundingClientRect(),b=document.querySelector('#overlay-body'),a=document.querySelector('.window-frame-art'),c=document.querySelector('#close-overlay').getBoundingClientRect();return d.matches(':modal')&&d.classList.contains('window-dialog')&&!d.classList.contains('paper-dialog')&&getComputedStyle(d).borderImageSource==='none'&&r.left>=0&&r.top>=0&&r.right<=innerWidth+1&&r.bottom<=innerHeight+1&&Math.abs(r.width/r.height-a.naturalWidth/a.naturalHeight)<.003&&d.scrollWidth<=d.clientWidth+1&&d.scrollHeight<=d.clientHeight+1&&b.scrollWidth<=b.clientWidth+1&&b.scrollHeight<=b.clientHeight+1&&c.width>=44&&c.height>=44&&c.left>=r.left&&c.top>=r.top&&c.right<=r.right+1&&c.bottom<=r.bottom+1;})()");
-   await check('scenery plays behind glass and a truly transparent window aperture '+size,"(()=>{const a=document.querySelector('.window-frame-art'),v=document.querySelector('.window-aperture video'),g=document.querySelector('.window-glass'),c=document.createElement('canvas');c.width=a.naturalWidth;c.height=a.naturalHeight;const ctx=c.getContext('2d');ctx.drawImage(a,0,0);const alpha=(x,y)=>ctx.getImageData(Math.round(x*c.width),Math.round(y*c.height),1,1).data[3];return a.getAttribute('src')==='/assets/images/ui/train-window-frame.png'&&alpha(.5,.5)<10&&alpha(.02,.02)<10&&[alpha(.15,.5),alpha(.85,.5),alpha(.5,.1),alpha(.5,.9)].some(a=>a>220)&&getComputedStyle(a).pointerEvents==='none'&&getComputedStyle(g).pointerEvents==='none'&&v.loop&&v.muted&&v.playsInline&&!v.controls&&v.disablePictureInPicture&&v.querySelectorAll('source[src]').length===2&&getComputedStyle(v).objectFit==='cover';})()");
-   const beforeTime=await evaluate("document.querySelector('.window-aperture video').currentTime");
-   await wait("Math.abs(document.querySelector('.window-aperture video').currentTime-"+beforeTime+")>.08",'window scenery advances');
-   await snapshot('window-frame-'+size);
-   await retainWindow();await click('#close-overlay');await windowReleased();
-   await check('close releases video decoder and restores scene controls '+size,"!document.querySelector('#overlay').open&&!document.querySelector(':modal')&&!document.querySelector('.chat-area').inert&&getComputedStyle(document.querySelector('.chat-area')).pointerEvents!=='none'&&window.__qaOldWindow.readyState===0");
-   await click('[data-hotspot="window"]');await ready();await windowReady();
-   await check('reopening creates one fresh window player '+size,"document.querySelectorAll('.window-aperture video').length===1&&window.__qaOldWindow!==document.querySelector('.window-aperture video')&&!window.__qaOldWindow.isConnected&&window.__qaOldWindow.paused");
-   await retainWindow();await escape();await windowReleased();
+   await check('car 1 has no window interaction or scenery video '+size,"!document.querySelector('[data-hotspot=\"window\"],.window-video-view')&&!document.querySelector('#overlay').open");
    await click('#menu-btn');await images();
-   await check('settings restores its ordinary paper after the window '+size,"document.querySelector('#overlay').dataset.view==='settings'&&document.querySelector('#overlay').classList.contains('paper-dialog')&&!document.querySelector('#overlay').classList.contains('window-dialog')&&getComputedStyle(document.querySelector('#overlay')).borderImageSource.includes('dossier-panel.png')&&!document.querySelector('.window-video-view')");
+   await check('settings opens its ordinary paper '+size,"document.querySelector('#overlay').dataset.view==='settings'&&document.querySelector('#overlay').classList.contains('paper-dialog')&&!document.querySelector('#overlay').classList.contains('window-dialog')&&getComputedStyle(document.querySelector('#overlay')).borderImageSource.includes('dossier-panel.png')&&!document.querySelector('.window-video-view')");
    await click('#close-overlay');
   }
   await viewport(1440,900);await seed('feedback');
@@ -768,20 +768,7 @@ try {
   await check('manually reversing the unlock roll saves the new open preference',"!document.querySelector('#train-map-panel').inert&&localStorage.getItem('train_map_closed')==='false'");
   await snapshot('window-map-unlocked-after-roll');
   await viewport(390,844);await seed('feedback');
-  await evaluate("(()=>{window.__qaNativePlay=HTMLMediaElement.prototype.play;window.__qaAutoplayDescriptor=Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype,'autoplay');Object.defineProperty(HTMLMediaElement.prototype,'autoplay',{...window.__qaAutoplayDescriptor,set(value){window.__qaAutoplayDescriptor.set.call(this,false);}});HTMLMediaElement.prototype.play=function(){if(this.closest('.window-video-view'))return Promise.reject(new DOMException('QA autoplay denied','NotAllowedError'));return window.__qaNativePlay.call(this);};})()");
-  await click('[data-hotspot="window"]');await ready();
-  await wait("!document.querySelector('.window-video-status').hidden&&document.querySelector('.window-video-status').textContent.includes('창문을 눌러')",'autoplay fallback gives a window gesture');
-  await snapshot('window-frame-autoplay-fallback-390');
-  await evaluate("(()=>{HTMLMediaElement.prototype.play=window.__qaNativePlay;Object.defineProperty(HTMLMediaElement.prototype,'autoplay',window.__qaAutoplayDescriptor);return true;})()");
-  await click('.window-aperture video');await windowReady();
-  await check('a real window click recovers rejected autoplay',"document.querySelector('.window-video-status').hidden&&!document.querySelector('.window-aperture video').paused");
-  for(const [key,code,virtualCode] of [['Enter','Enter',13],[' ','Space',32]]){
-   await evaluate("(()=>{const v=document.querySelector('.window-aperture video');v.pause();v.focus();return true;})()");
-   await call('Input.dispatchKeyEvent',{type:'keyDown',key,code,windowsVirtualKeyCode:virtualCode});
-   await call('Input.dispatchKeyEvent',{type:'keyUp',key,code,windowsVirtualKeyCode:virtualCode});
-   await windowReady();await check('keyboard '+code+' resumes the focused window',"document.activeElement===document.querySelector('.window-aperture video')&&!document.querySelector('.window-aperture video').paused");
-  }
-  await retainWindow();await escape();await windowReleased();
+
  }
  if(!entryArtOnly&&!entryOnly&&!windowMapOnly&&!presentationOnly&&!interfaceOnly&&!scenesOnly&&!feedbackOnly&&!cleanerItemsOnly){
  if(inventoryOnly)await inventoryChecks();

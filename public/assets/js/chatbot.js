@@ -54,7 +54,7 @@ async function prepareScene(data,force=false) {
     if(window.TrainLoading){window.TrainLoading.showMovement(data.game.location.name);movementReady=window.TrainLoading.waitForMovement();}
     else{showSceneLoading(true);movementReady=new Promise(resolve=>setTimeout(resolve,1000));}
   }else if(changed)showSceneLoading(true);
-  const surfaces=!state?['dialogue-paper','chat-input','choice-paper','hint-paper','train-window-frame'].map(name=>prepareImage('/assets/images/ui/'+name+'.png')):[];
+  const surfaces=!state?['dialogue-paper','chat-input','choice-paper','hint-paper'].map(name=>prepareImage('/assets/images/ui/'+name+'.png')):[];
   const roomArt=wallRepairRooms.has(data.game.location.id)?[prepareImage(wallRepairImage)]:[];
   const artwork=Promise.all([...surfaces,...roomArt,prepareImage(data.scene.background),...data.scene.people.filter(p=>p.active||!data.game.npc).map(p=>prepareImage(!p.active&&p.registration?p.registration.image:p.image)),...(data.scene.hotspots||[]).filter(p=>p.image).map(p=>prepareImage(p.image)),...(data.ui?.document?.artwork?[prepareImage(data.ui.document.artwork)]:[])]);
   const [loaded]=await Promise.allSettled([artwork,movementReady]);
@@ -353,14 +353,13 @@ function apply(data, force = false, interaction = null) {
   if(state.status!=='playing'){
     // 기관사가 내쫓는 대사처럼 실패 직후 인물 대사가 있으면, 대사를 먼저 보여준 뒤 엔딩 영상으로 넘어간다.
     if(previous?.status==='playing'&&state.npc&&data.reply){
-      if(overlay.open){stopOverlayMedia();closeDialog(overlay);}
+      if(overlay.open){closeDialog(overlay);}
       scheduleEnding(data.reply);
     }else if(!endingTimer)openEnding();
   }
   else if(state.confirmation) openConfirmation();
   else if(data.ui?.document) { selectedDocument=data.ui.document;documents.set(selectedDocument.id,selectedDocument);openInventory(selectedDocument); }
   else if(data.ui?.notice) openNotice();
-  else if(data.ui?.window_video) openWindowVideo();
   else if(data.ui?.inventory) openInventory();
   else if(data.ui?.control) openControl();
   else if(data.ui?.lever) openLever();
@@ -576,9 +575,6 @@ function renderSceneActions(){
  if(p.appearance==='paper')b.append(node('span','notice-mark','안내문'));layer.append(b);
  });
 }
-function stopOverlayMedia(){
-  $('overlay-body').querySelectorAll('video').forEach(video=>{video.pause();video.removeAttribute('src');video.querySelectorAll('source').forEach(source=>source.removeAttribute('src'));video.load();});
-}
 function openNotice(){
   if(state?.location.id!=='car_1')return;
   const body=openOverlay('기관실 안내문','notice');
@@ -586,34 +582,11 @@ function openNotice(){
   img.src='/assets/images/car1/notice.png';img.alt='Warning: 열차의 정차는 기관실에서만 가능';
   page.append(img);body.append(page);
 }
-function openWindowVideo(){
-  if(state?.location.id!=='car_1')return;
-  const body=openOverlay('차창 밖','window');
-  const frame=node('div','window-video-view'),aperture=node('div','window-aperture');
-  const video=node('video'),status=node('p','window-video-status'),art=node('img','window-frame-art');
-  const glass=node('div','window-glass');glass.setAttribute('aria-hidden','true');
-  art.src='/assets/images/ui/train-window-frame.png';art.alt='';art.draggable=false;art.setAttribute('aria-hidden','true');
-  video.controls=false;video.disablePictureInPicture=true;video.disableRemotePlayback=true;video.loop=true;video.autoplay=true;video.muted=true;video.playsInline=true;video.preload='auto';video.tabIndex=0;
-  video.setAttribute('aria-label','반복되는 열차 밖의 밤 풍경');video.setAttribute('playsinline','');
-  for(const [ext,type] of [['webm','video/webm'],['mp4','video/mp4']]){const source=node('source');source.src='/assets/videos/car1-window-loop.'+ext;source.type=type;video.append(source);}
-  status.setAttribute('role','status');status.hidden=true;
-  const showStatus=text=>{if(!video.isConnected)return;status.textContent=text;status.hidden=!text;};
-  video.addEventListener('error',()=>{if(video.querySelector('source[src]'))showStatus('영상을 재생하지 못했습니다. 창을 닫고 다시 열어 주세요.');});
-  video.addEventListener('playing',()=>showStatus(''));
-  video.addEventListener('click',()=>video.play().then(()=>showStatus('')).catch(()=>{}));
-  video.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();video.play().then(()=>showStatus('')).catch(()=>{});}});
-  aperture.append(video,glass,status);frame.append(aperture,art);body.append(frame);
-  video.play().catch(()=>{
-    if(!video.isConnected)return;
-    showStatus('창문을 눌러 창밖을 살펴보세요.');
-  });
-}
 function openOverlay(title, view) {
-  stopOverlayMedia();overlay.dataset.view=view;
-  overlay.classList.toggle('paper-dialog',!['inventory','control','ending-complete','window','notice'].includes(view));
+  overlay.dataset.view=view;
+  overlay.classList.toggle('paper-dialog',!['inventory','control','ending-complete','notice'].includes(view));
   overlay.classList.toggle('device-dialog',view==='control');
   overlay.classList.toggle('ending-dialog',view==='ending-complete');
-  overlay.classList.toggle('window-dialog',view==='window');
   overlay.classList.toggle('notice-dialog',view==='notice');
   overlay.querySelector('.ending-card-art')?.remove();overlay.querySelector('.ending-result')?.remove();
   $('overlay-title').textContent=title;$('overlay-body').replaceChildren();
@@ -622,7 +595,7 @@ function openOverlay(title, view) {
 }
 function pendingReport(){return overlay.open&&overlay.dataset.view==='inventory'&&selectedDocument?.id==='route_report'&&state?.inventory.some(item=>item.id==='route_report'&&!item.read);}
 async function confirmReport(close=false){const data=await act('ack_document',{target:'route_report'});if(data&&close)closeDialog(overlay);return data;}
-function closeOverlay() { if(overlay.dataset.view==='ending-complete'||busy && (overlay.dataset.view==='confirm'||pendingReport())) return; if(pendingReport()){confirmReport(true);return;} if(overlay.dataset.view==='confirm' && state?.confirmation) { act('cancel').then(data=>{if(data) closeDialog(overlay);}); } else {stopOverlayMedia();closeDialog(overlay);} }
+function closeOverlay() { if(overlay.dataset.view==='ending-complete'||busy && (overlay.dataset.view==='confirm'||pendingReport())) return; if(pendingReport()){confirmReport(true);return;} if(overlay.dataset.view==='confirm' && state?.confirmation) { act('cancel').then(data=>{if(data) closeDialog(overlay);}); } else {closeDialog(overlay);} }
 function paperAction(label, handler, art, cls = '', server = true) {
   const b=button('',handler,'paper-action '+cls,server);
   b.setAttribute('aria-label',label);
@@ -809,7 +782,7 @@ function showEndingComplete(kind) {
   content.append(restart);body.append(content);
 }
 function openCinematic(kind,src) {
-  if(overlay.open){stopOverlayMedia();closeDialog(overlay);}
+  if(overlay.open){closeDialog(overlay);}
   acquisitionQueue=[];dismissAcquisition();
   const opening=kind==='opening',session=++cinematicSession;
   cinematicActive=true;cinematicLeaving=false;cinematicNeedsSound=false;
@@ -960,7 +933,7 @@ async function startNewGame() {
     await request('/api/game/reset',{});
     try{sessionStorage.removeItem(openingSeenKey);}catch{}
     try{localStorage.removeItem('noTerminus.playerName');}catch{}
-    stopOverlayMedia();releaseCinematic();
+    releaseCinematic();
     // Return to boarding before creating a replacement game or playing its intro.
     window.location.replace('/');leaving=true;
   }catch(e){setError(e.message,false);}
@@ -980,7 +953,7 @@ $('conversation-history').addEventListener('scroll',event=>{const list=event.cur
 overlay.addEventListener('close',revealOpenedLocations);
 try{if(localStorage.getItem('train_map_closed')==='true')applyMapClosed(true);}catch{}
 $('hint-choice').addEventListener('click',()=>{if(activeHintChoice)perform({action:{...activeHintChoice.action}});});
-$('bag-btn').addEventListener('click',()=>openInventory());$('end-talk').addEventListener('click',()=>act('end_talk'));$('history-btn').addEventListener('click',openHistory);$('hint-btn').addEventListener('click',()=>act('hint'));$('close-overlay').addEventListener('click',closeOverlay);overlay.addEventListener('close',stopOverlayMedia);overlay.addEventListener('cancel',e=>{e.preventDefault();closeOverlay();});
+$('bag-btn').addEventListener('click',()=>openInventory());$('end-talk').addEventListener('click',()=>act('end_talk'));$('history-btn').addEventListener('click',openHistory);$('hint-btn').addEventListener('click',()=>act('hint'));$('close-overlay').addEventListener('click',closeOverlay);overlay.addEventListener('cancel',e=>{e.preventDefault();closeOverlay();});
 $('retry-btn').addEventListener('click',()=>{if(lastRequest)perform(lastRequest,true);});$('reload-btn').addEventListener('click',async()=>{if(busy)return;setBusy(true);try{const data=await request('/api/game');if(state){await prepareScene(data);applyResponse(data);}else await beginGame(data);clearError();toast('진행 기록을 불러왔습니다.');}catch(e){document.body.classList.remove('game-booting');setError(e.message,false);}finally{showSceneLoading(false);setBusy(false);}});
 $('scene-world').addEventListener('pointermove',e=>{if(scene?.light_mode!=='flashlight'||state?.npc)return;const r=e.currentTarget.getBoundingClientRect();$('darkness').style.setProperty('--beam-x',((e.clientX-r.left)/r.width*100)+'%');$('darkness').style.setProperty('--beam-y',((e.clientY-r.top)/r.height*100)+'%');});
 try{if(localStorage.getItem('train_reduced_motion')==='true')document.documentElement.classList.add('reduced-motion');}catch{}

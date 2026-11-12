@@ -26,7 +26,6 @@
   },
   "objects": [
     {"key":"car1.notice","scene":"car_1","id":"notice","label":"기관실 정차 안내문","kind":"inspect","target":"notice","polygon":[[508,521],[618,519],[622,525],[622,566],[617,571],[510,569],[506,563],[507,527]]},
-    {"key":"car1.window","scene":"car_1","id":"window","label":"차창 밖 반복 풍경","kind":"inspect","target":"window","polygon":[[270,532],[316,527],[321,640],[268,647]]},
     {"key":"car2.explorer","scene":"car_2","id":"explorer","label":"탐험가","kind":"person","sprite":{"source":"/assets/images/characters/explorer-seated.png","rect":[160,485,420,630],"grounded":true,"tone":[0.86,0.84,0.79],"shadows":[[320,837,200,38,82],[432,1090,93,21,72]],"occlusion":[[[0,854],[271,857],[317,867],[337,880],[344,1121],[0,1121]]]}},
     {"key":"car3.cleaner","scene":"car_3","id":"cleaner","label":"청소원","kind":"person","sprite":{"source":"/assets/images/characters/cleaner-working.png","rect":[480,425,330,495],"grounded":true,"tone":[0.86,0.84,0.79],"shadows":[[580,889,77,17,80],[697,901,94,20,65]],"occlusion":[[[155,650],[546,656],[550,1052],[433,1052],[433,1121],[0,1121],[0,866],[90,854],[96,805]]]}},
     {"key":"car3.elder","scene":"car_3","id":"elder","label":"노인","kind":"person","sprite":{"source":"/assets/images/characters/elder-seated-v4.png","rect":[860,495,380,570],"grounded":true,"tone":[0.86,0.84,0.79],"shadows":[[1005,846,170,28,75],[985,1035,95,18,65],[1080,1050,95,18,65]],"occlusion":[[[1403,854],[1041,857],[1010,866],[1011,892],[1032,910],[1033,1121],[1403,1121]]]}},

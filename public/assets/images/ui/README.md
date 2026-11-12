@@ -13,7 +13,6 @@ Generated raster assets for the image-based train game interface. All assets wer
 | `dossier-panel.png` | Generated paper and burgundy leather skin shared by conversation history, settings, journal, hints and confirmations |
 | `ending-certificate.png` | Warm happy-ending railway certificate displayed at its native 3:2 ratio |
 | `ending-certificate-sad.png` | Desaturated ash-grey sad-ending certificate with worn edges, transparent holes and live ivory text |
-| `train-window-frame.png` | Walnut-and-green-curtain window frame with a transparent opening for the live exterior video; [final prompt](WINDOW_PROMPT.md) |
 | `chat-input.png` | Distressed dark input frame with ivory paper send area and printed airplane |
 | `train-route.png` | Seven connected cutaway train interiors: four passenger cars, crew room, exit vestibule, final engine control room |
 | `ticket-item.png`, `flashlight-item.png`, `book-item.png` | Illustrated inventory objects |
