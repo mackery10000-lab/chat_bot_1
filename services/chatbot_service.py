@@ -296,7 +296,6 @@ class GameEngine:
                 "crew": "승무원실",
                 "engine": "기관실",
                 "notice": "안내문",
-                **({"window": "창문"} if s["location"] == "car_1" else {}),
                 "cover": "점검 덮개 열기",
                 "lever_down": "레버를 아래로 끝까지 내리기",
                 "lever_up": "레버 올리기",
@@ -500,14 +499,6 @@ class GameEngine:
             return self.result(
                 "안내문을 직접 읽었다. “Warning : 열차의 정차는 기관실에서만 가능.” 1호차에는 기관실이 보이지 않는다. 반대편 객차부터 살펴보자.", ui={"notice": True}
             )
-        if target == "window":
-            if s["location"] != "car_1":
-                return self.result("창밖을 살펴보는 상호작용은 1호차에서 할 수 있다.")
-            self.mark(s, "loop_observed", "창밖에 같은 철교와 터널이 반복된다.")
-            return self.result(
-                "창밖을 자세히 본다. 조금 전에 지났던 것 같은 철교와 터널이 다시 나타난다. 열차는 앞으로 움직이는데 풍경은 반복된다.",
-                ui={"window_video": True},
-            )
         if target == "desk" and s["location"] == "crew":
             return self.result("책상에는 펼쳐진 운행 서류가 보인다. 운행 서류를 직접 살펴보자.", ui={"non_progress": True})
         if (
@@ -560,7 +551,7 @@ class GameEngine:
         turns = s.setdefault("npc_turns", {})
         turns[npc] = turns.get(npc, 0) + 1
         if (npc == "attendant" and topic in ("stop", "warning") and not s["flags"].get("anomaly_discussed")
-                and self._awaiting_anomaly(s)):
+                and self._awaiting_anomaly(s) and re.search(ANOMALY_OBSERVATION, intent.get("quote", ""))):
             # '무슨 이상을 봤냐'는 질문에 '열차가 안 멈춘다'고 답하면 반복 관찰을 말한 것이다.
             topic = "loop"
         profile_reply = character_reply(npc, topic)
@@ -737,24 +728,18 @@ class GameEngine:
                     npc,
                     ["cleaner_lost"],
                 )
+            if not f.get("elder_features"):
+                # Knowing the answer in advance cannot open the lost-ticket route.
+                s.update(pending_dialogue="", pending_features=[], features=[], description_item="")
+                return self.result(
+                    "아이고, 손님. 지금은 쏟아진 커피를 닦느라 바쁘답니다. 바닥이 젖었으니 잠시 옆으로 비켜 주시겠어요?",
+                    npc,
+                )
             if topic in ("greeting", "other") and intent["intent"] not in ("describe", "accept"):
                 if s["cleaner_count"] >= 3:
-                    hint = " 먼저 옆의 노인과 대화해 분실물 특징을 확인해 주시겠어요?" if not f.get("elder_features") else " 분실물에 관해 필요한 것이 있으면 다시 말씀해 주세요."
+                    hint = " 필요한 것이 있으면 다시 말씀해 주세요."
                     return self.result("아이고, 손님. 같은 질문은 들었습니다. 커피를 마저 닦아야 하니 잠시 비켜 주시겠어요?" + hint, npc, ["cleaner_lost"])
-                s["pending_dialogue"] = "describe_ticket"
-                return self.result("무슨 일이세요? 지금은 커피를 청소 중이라 통행이 조금 불편하실 수 있습니다. 분실물을 찾으시면 어떤 모양인지 말씀해 주시겠어요?", npc, ["cleaner_lost"])
-            if not f.get("elder_features"):
-                hint = (
-                    " 옆의 어르신께 먼저 분실물 특징을 여쭤보시겠어요?"
-                    if s["cleaner_count"] >= 3
-                    else ""
-                )
-                return self.result(
-                    "아이고, 손님. 잃어버린 물건의 모양을 명확히 설명해 주시면 찾아드리겠습니다."
-                    + hint,
-                    npc,
-                    ["cleaner_lost"],
-                )
+                return self.result("무슨 일이세요? 지금은 커피를 청소 중이라 통행이 조금 불편하실 수 있습니다. 바닥이 젖었으니 조심해 주시겠어요?", npc)
             if (
                 intent["intent"] == "accept"
                 and s["pending_dialogue"] == "confirm_description"
@@ -862,10 +847,15 @@ class GameEngine:
                 ["cleaner_lost"],
             )
         if npc == "attendant":
+            if topic == "restroom":
+                return self.result(
+                    "화장실에 가시려는 거군요. 이동하실 때는 객차가 흔들릴 수 있으니 손잡이를 잡고 조심해 주십시오.",
+                    npc,
+                )
             if topic == "year":
-                permission = "기관실 출입은 약속대로 도와드리겠습니다." if f.get("engine_permission") else "그렇다고 승객의 기관실 출입을 바로 허가할 수는 없습니다."
                 year = "2026년이라고요…? 저는 2016년에 근무를 시작했습니다. 믿기 어렵습니다." if "2026" in intent.get("quote", "") else "2016년입니다. 출발할 때도 그렇게 확인했습니다."
-                return self.result(year + " 제 시계는 계속 23시 59분입니다. " + permission, npc, ["attendant_rule"])
+                permission = " 약속대로 기관실 출입을 도와드리겠습니다." if f.get("engine_permission") else ""
+                return self.result(year + " 제 시계는 계속 23시 59분입니다." + permission, npc, ["attendant_rule"])
             if f.get("engine_permission"):
                 return self.result(
                     "도와주셔서 감사합니다. 약속대로 기관실 문을 열어두었습니다. 조심해서 들어가십시오.",
@@ -881,7 +871,7 @@ class GameEngine:
                 if stage in ("where", "stop", "anomaly"):
                     s["scenario_steps"][npc] = "entry"
                 return self.result(
-                    "역시 저만 이상하게 느낀 것이 아니었군요. 운행 시간이 한참 지났는데도 도착하지 않고 있습니다. 하지만 규정상 승객을 기관실에 들여보낼 수는 없습니다.",
+                    "역시 저만 이상하게 느낀 것이 아니었군요. 운행 시간이 한참 지났는데도 도착하지 않고 있습니다. 시간표를 확인해도 제 시계는 계속 23시 59분입니다.",
                     npc,
                     ["attendant_rule"],
                 )
@@ -897,6 +887,8 @@ class GameEngine:
                     npc,
                     ["attendant_rule"],
                 )
+            if topic == "help" and not (f.get("anomaly_discussed") or f.get("mission_offered") or s["pending_dialogue"] == "why_engine"):
+                return self.result("어떤 도움이 필요하십니까? 말씀해 주십시오.", npc)
             if topic in ("permission", "help", "stop"):
                 if f.get("anomaly_discussed"):
                     self.mark(s, "mission_offered")
@@ -1466,9 +1458,7 @@ class GameEngine:
             ],
             "attendant": [
                 ("danger", "왜 위험하다고 하셨나요?", "“달리는 중에는 통로가 안전하지 않습니다. 갑자기 흔들릴 수 있으니 주의해 주십시오.” 승무원의 목소리는 단호하지만, 표정에는 긴장이 남아 있다."),
-                ("expression", "승무원의 표정을 살핀다.", "승무원은 감사의 뜻으로 고개를 숙인다. 굳어 있던 표정이 조금 누그러졌다." if f.get("door_open") else "단정한 몸짓과 굳은 표정 사이에 쉽게 드러내지 않는 긴장감이 흐른다."),
                 ("arrival", "도착할 때가 지난 것 같지 않나요?", "“운행 시간이 길어진 것은 저도 알고 있습니다.” 승무원은 잠시 말을 멈춘다. “평소와 같다고 말씀드리기는 어렵군요.”"),
-                ("concern", "무언가 걱정되는 일이 있으신가요?", "“문을 열어주셔서 감사합니다. 승객 여러분이 무사히 계실 수 있도록 저도 돕겠습니다.” 목소리에 안도감이 묻어난다." if f.get("door_open") else "“승객 여러분이 무사한 것이 우선입니다.” 승무원은 불안을 감추듯 옷깃을 고쳐 잡으며 짧게 답한다."),
             ],
             "driver": [
                 ("stop", "열차를 멈출 수는 없나요?", "“제동과 경로 확인은 이미 시도했습니다. 한 번 지났던 구간이 다시 보입니다. 정차 요구만으로 해결되지 않습니다.”"),
@@ -1526,7 +1516,8 @@ class GameEngine:
         if kind == "select_npc":
             # Requested hints take the immediate quest action. Ordinary character
             # selection starts the longer authored dialogue through apply_action.
-            return self.talk(s, dispatch["target"], "greeting", {"intent": "talk", "mode": "act"})
+            topic = "lost_ticket" if dispatch["target"] == "cleaner" and s["flags"].get("elder_features") else "greeting"
+            return self.talk(s, dispatch["target"], topic, {"intent": "talk", "mode": "act"})
         if kind == "question":
             return self.talk(s, dispatch["target"], dispatch["topic"], {"intent": "accept" if dispatch["accept"] else "talk", "mode": "act", "claim": bool(dispatch.get("claim"))})
         if kind == "compose":

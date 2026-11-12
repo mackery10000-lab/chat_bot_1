@@ -203,11 +203,8 @@ class SmokeTest(GameTestCase):
             "images/scene_01.png",
             "images/portrait_01.png",
             "images/car1/background.png",
-            "images/car1/window.png",
             "images/car1/notice-hotspot.png",
             "images/car1/notice.png",
-            "videos/car1-window-loop.mp4",
-            "videos/car1-window-loop.webm",
         ):
             r = self.client.get("/assets/" + asset)
             self.assertEqual(r.status_code, 200)
@@ -410,11 +407,12 @@ class SmokeTest(GameTestCase):
         )
         self.assertNotIn("ticket_old", self.items())
 
-    def test_cleaner_third_turn_hint_and_no_lockout(self):
+    def test_cleaner_repeated_questions_stay_busy_without_lockout(self):
         self.three()
         for _ in range(3):
             self.t("cleaner", "lost_ticket")
-        self.assertIn("어르신", self.data["reply"])
+        self.assertIn("비켜", self.data["reply"])
+        self.assertNotRegex(self.data["reply"], "어르신|모양|특징|분실물")
         self.ticket()
         self.assertIn("ticket_old", self.items())
 
@@ -791,15 +789,15 @@ class SmokeTest(GameTestCase):
 
 
     # v1.1: audit F01-F13 and the requested interaction contract.
-    def test_f01_excluded_targets_preserve_window(self):
+    def test_f01_excluded_targets_preserve_current_ticket(self):
         g=DemoGenerator()
-        for text in ["안내문 대신 창문을 살펴보겠습니다.","안내문이 아니라 창문을 조사합니다.","안내문 말고 창문을 살펴볼게요."]:
-            value=intent("inspect","window");value["quote"]=text
+        for text in ["안내문 대신 제 승차권을 살펴보겠습니다.","안내문이 아니라 제 승차권을 조사합니다.","안내문 말고 제 승차권을 살펴볼게요."]:
+            value=intent("inspect","ticket_current");value["quote"]=text
             parsed=g._ground(value,text,{})
-            self.assertEqual(parsed["target"],"window")
+            self.assertEqual(parsed["target"],"ticket_current")
             self.call(value=parsed,message=text)
             self.assertFalse(self.flags().get("notice_read"))
-            self.assertTrue(self.flags().get("loop_observed"))
+            self.assertTrue(self.flags().get("current_ticket_read"))
 
     def test_f01_desk_and_old_ticket_normalization(self):
         g=DemoGenerator()
@@ -1077,14 +1075,14 @@ class SmokeTest(GameTestCase):
             sample["npc"] = ""
             self.assertEqual(engine.choices(sample), [])
 
-    def test_window_video_is_only_available_in_car_one(self):
+    def test_window_interaction_is_removed_from_every_location(self):
         self.a("inspect", "window")
-        self.assertTrue(self.data["ui"]["window_video"])
-        self.assertTrue(self.flags()["loop_observed"])
+        self.assertNotIn("window_video", self.data["ui"])
+        self.assertFalse(self.flags().get("loop_observed"))
         self.a("inspect", "notice")
         self.assertTrue(self.data["ui"]["notice"])
         state = self.service.store.get(self.client.get_cookie(web.COOKIE).value)
-        for location in ("car_2", "car_3", "car_4", "crew", "engine"):
+        for location in ("car_1", "car_2", "car_3", "car_4", "crew", "engine"):
             with self.subTest(location=location):
                 sample = deepcopy(state)
                 sample.update(location=location, npc="")
@@ -1353,14 +1351,14 @@ class SmokeTest(GameTestCase):
 
     def test_hint_grant_expires_after_another_interaction(self):
         option = self.hint_choice()
-        self.a("inspect", "window")
+        self.a("look")
         rejected = self.client.post("/api/chat", json={
             "request_id": "expired_hint",
             "revision": self.data["game"]["revision"], "action": option["action"],
         })
         self.assertEqual(rejected.status_code, 409)
         option = self.hint_choice()
-        self.a("inspect", "window")
+        self.a("inspect", "ticket_current")
         rejected = self.client.post("/api/chat", json={
             "request_id": "expired_after_inspect",
             "revision": self.data["game"]["revision"], "action": option["action"],
@@ -1684,7 +1682,7 @@ class RegisteredSceneTest(GameTestCase):
         gid = self.client.get_cookie(web.COOKIE).value
         state = self.service.store.get(gid)
         state["flags"].update(light_on=True, mission_accepted=True, manual_read=True, door_open=True)
-        expected = {"car_1": {"notice", "window"}, "car_4": {"crew_door", "inspection_cover", "door_handle"},
+        expected = {"car_1": {"notice"}, "car_4": {"crew_door", "inspection_cover", "door_handle"},
                     "crew": {"report"}, "engine": {"control", "engine_lever"}}
         for location in ("car_1", "car_2", "car_3", "car_4", "crew", "engine"):
             state["location"] = location

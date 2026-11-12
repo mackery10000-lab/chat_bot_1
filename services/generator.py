@@ -55,7 +55,6 @@ INTENT_SCHEMA = {
                 "attendant",
                 "driver",
                 "notice",
-                "window",
                 "desk",
                 "door",
                 "cover",
@@ -91,6 +90,7 @@ INTENT_SCHEMA = {
                 "year",
                 "origin",
                 "permission",
+                "restroom",
                 "help",
                 "password",
                 "stop",
@@ -181,6 +181,15 @@ def ground_scenario_choice(value, message, context):
     """현재 제시된 문장 자체는 과거형/부정 단어가 있어도 그 대화 선택이다."""
     if value.get("dialogue_mode") == "confusion":
         return value
+    if ((context.get("active_npc") or value.get("target")) == "attendant"
+            and value.get("mode") not in ("negated", "hypothesis", "reported", "unclear")
+            and re.search(r"화장실|용변", message)
+            and not re.search(r"기관실|승무원실|(?:기차|열차|이\s*차).{0,15}(?:멈|세우|정차)", message)):
+        # A passenger's destination must not consume the current engine-room choice,
+        # even if the model supplied its ID or mistook 'going in' for permission.
+        return dict(value, intent="talk", target="attendant", recipient="", topic="restroom",
+                    mode="act", dialogue_mode="scenario", dialogue_choice_id="",
+                    affirmed_features=[], denied_features=[], feature_evidence=[], requested_facts=[])
     if context.get("last_dialogue_mode") in FREE_DIALOGUE_MODES and re.fullmatch(
         r"\s*(?:네|예|응|아니요|아뇨|아니|그래요|맞아요|맞습니다|좋아요|좋습니다|알겠습니다)[.!?,~\s]*", message
     ):
@@ -453,7 +462,7 @@ NPC에게 정보를 묻거나 인사/답변하는 것은 talk다. '외형을 알
 기관실에 가기/출입 이유 설명은 현재 위치에서 승무원에게 말하는 경우 talk/permission이며, 명확히 이동하겠다는 경우만 move다. 직전 질문을 수락하거나 확인하는 네/좋아요/맞아요는 context.pending_dialogue가 있을 때 accept다. confirm_description은 외형이 같은 표를 찾는다는 뜻인지 확인하는 질문이다.
 최종 제출/비밀번호 성공/엔딩을 직접 판정하지 않는다. 비밀번호를 말하거나 추측하는 것은 talk/password이며 기회 소비가 아니다. 정답을 만들지 않는다.
 사용자는 현재 장소에 없는 인물과 원격 대화할 수 없다. target은 제공한 ID를 사용하며 불명확하면 빈 문자열이다."""
-        instructions += """\n추가 규칙(우선): quote는 이번에 실행/질문할 구절을 원문 그대로 복사한다. 배제한 대상 대신 최종 대상만 고른다. '안내문 대신 창문 조사'는 window다. '네, 하지만 지금은 제 승차권을 읽겠습니다'는 inspect/ticket_current이고 accept가 아니다.
+        instructions += """\n추가 규칙(우선): quote는 이번에 실행/질문할 구절을 원문 그대로 복사한다. 배제한 대상 대신 최종 대상만 고른다. 창문은 조사 대상이 아니다. '네, 하지만 지금은 제 승차권을 읽겠습니다'는 inspect/ticket_current이고 accept가 아니다.
 context.dialogue_choices에 현재 가능한 시나리오 답변이 있다. 이번 발화가 그중 하나와 같은 의미일 때만 dialogue_choice_id에 해당 id를 넣는다. 일치하지 않거나 다른 질문이면 빈 문자열이다. 미래 단계의 답변을 만들거나 가장 비슷한 선택지를 강제로 고르지 않는다.
 다음 칸이나 기관실을 직접 조사하겠다는 의사 표현은 talk/departure다. 단순 도구 요청은 tools이며 이동 의사와 구분한다. 열차에서 내리지 못했다는 상황 설명과 실종 사건/신문 질문은 case다.
 청소원에게 한 특징만 설명한 뒤 다른 특징만 말한 독립 답변을 누적하지 않는다. 승차권 정답은 이번 설명에서 두 특징이 함께 확인되어야 한다. 일반적인 의미 일치는 허용하지만 이전 발화에만 있는 특징을 복사하지 않는다.
@@ -466,6 +475,7 @@ feature_evidence는 각 특징의 원문 구절, 물건, positive/negative를 �
 현재 대화 선택지와 같은 뜻의 발화는 dialogue_choice_id로 연결한다. 직접 제어/증거 제출을 요청해도 엔딩을 판정하지 않는다. 최종 확정은 전용 UI에서만 처리한다."""
         instructions += """\n인물에 관한 질문도 본래 질문으로 처리한다. 왜 탔는지/무슨 일을 하는지/어떻게 여기 오게 됐는지/조사 경력은 talk/background, 다친 이유/발목 상태/몸은 괜찮은지는 talk/injury다. 자기소개는 기존 identity, 실종 사건 자체는 case, 반복 관찰은 loop로 구분한다.
 단순히 열차가 위험하다고 경고하거나 걱정하는 말은 talk/warning이다. 반복 현상을 구체적으로 말하면 loop, 열차를 멈춰달라는 요구는 stop, 기관실 출입 요청은 permission을 유지한다. '열차가 안 멈춰요', '계속 달리기만 해요', '도착하지 않아요'처럼 이상 현상을 관찰해 설명하는 말과 열차가 왜 순환하는지 묻는 말은 stop이 아니라 loop다.
+승무원에게 화장실 이용이나 위치를 묻는 말은 talk/restroom이다. 일반적인 도움 요청이나 다른 장소에 가고 싶다는 말은 기관실 출입 요청이 아니다. permission은 기관실·승무원실 출입을 실제로 묻거나 요청할 때만 사용한다. 화장실 이야기를 현재 기관실 선택지에 연결하지 말고 dialogue_choice_id는 빈 문자열로 둔다.
 실종 원인이나 미공개 해법은 임의로 만들지 않는다. 개인적인 배경 질문은 아래 dialogue_mode 규칙으로 구별한다.
 무례한 말이나 단순 재촉은 행동 위협과 구별한다. insult는 talk 및 behavior=rude, 단순 재촉은 talk 및 behavior=rush다. 함께 묻는 정보가 있으면 그 topic과 dialogue_choice_id를 보존한다. 실제 밀치기·때리기·협박만 threat다. 예: '빨리 표 모양이나 말해요'는 talk/appearance/behavior=rush이며 설명 요청을 버리지 않는다.
 청소원에게 외형을 전달한 문장은 background/잡담으로 바꾸지 말고 기존 describe 판정을 우선한다."""
@@ -543,7 +553,7 @@ lore/smalltalk/deflect/confusion은 반드시 intent=talk, mode=act, dialogue_ch
             elif pending == "confirm_description" and short_yes:
                 result.update(intent="accept", target="cleaner", recipient="")
         aliases = {
-            "notice": r"안내문|공지", "window": r"창문|창밖", "desk": r"책상",
+            "notice": r"안내문|공지", "desk": r"책상",
             "facility_manual": r"안내서", "newspaper": r"신문", "flashlight": r"손전등",
             "route_report": r"보고서|운행\s*서류", "door": r"출입문|승무원실\s*문",
             "ticket_old": r"오래된\s*승차권|2016\s*년?\s*(?:승차권|표)|(?:노인|어르신)의?\s*(?:승차권|표)",
@@ -561,7 +571,7 @@ lore/smalltalk/deflect/confusion은 반드시 intent=talk, mode=act, dialogue_ch
                 candidates = [key for key, pattern in aliases.items() if re.search(pattern, previous)]
             if len(candidates) == 1:
                 result["target"] = candidates[0]
-            if result["mode"] == "act" and result["target"] in ("notice", "facility_manual", "newspaper", "route_report", "ticket_old", "ticket_current", "elder_testimony", "faded_paper", "punched_receipt", "window", "desk") and re.search(r"읽|살펴|조사", final):
+            if result["mode"] == "act" and result["target"] in ("notice", "facility_manual", "newspaper", "route_report", "ticket_old", "ticket_current", "elder_testimony", "faded_paper", "punched_receipt", "desk") and re.search(r"읽|살펴|조사", final):
                 result["intent"] = "inspect"
         if result["intent"] == "talk":
             if "appearance" in result.get("requested_facts", []) or re.search(r"(?:승차권|표|분실물).{0,20}(?:어떻게\s*생|모양|외형|특징)", final):

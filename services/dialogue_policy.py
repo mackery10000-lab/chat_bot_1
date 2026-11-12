@@ -161,6 +161,8 @@ def free_dialogue_context(npc, state):
     result.update(npc=npc, recognized_year=_recognized_year(npc, state),
                   mood=character_mood(npc, flags),
                   relationship="상대는 이 열차에서 처음 만난 승객이며 첫인사는 방금 나눴다. 예전에 만난 적은 없다.")
+    if npc == "cleaner" and not flags.get("elder_features"):
+        result["conversation_boundary"] = "커피를 청소하느라 바쁘다. 분실물이나 승차권 이야기를 먼저 꺼내거나 외형 설명을 요구하거나 노인에게 분실물을 물어보라고 안내하지 않는다."
     return result
 
 
@@ -229,6 +231,9 @@ def approve_free_reply(reply, npc, mode, state):
     value = reply.strip()
     if not value or len(value) > (500 if mode == "lore" else 220):
         return fallback
+    if (npc == "cleaner" and not state.get("flags", {}).get("elder_features")
+            and re.search(r"분실|승차권|잃어버|물건.{0,20}(?:모양|특징|외형)|(?:모양|특징|외형).{0,20}(?:설명|말씀)", value)):
+        return "손님, 지금은 커피를 닦느라 바쁘답니다. 바닥이 젖었으니 잠시 비켜 주시겠어요?"
     # Quotation marks are harmless; markdown, lists, stage directions, and speaker
     # role labels would turn an NPC response into narration or instructions.
     if re.search(r"(?:^|\n)\s*(?:#{1,6}\s|[-*]\s|\d+[.)]\s|(?:assistant|system|user|narrator)\s*:)|[{}\[\]<>]|\*\*", value, re.I):
