@@ -353,7 +353,9 @@ function apply(data, force = false, interaction = null) {
   if(state.status!=='playing'){
     // 기관사가 내쫓는 대사처럼 실패 직후 인물 대사가 있으면, 대사를 먼저 보여준 뒤 엔딩 영상으로 넘어간다.
     if(previous?.status==='playing'&&state.npc&&data.reply){
+
       if(overlay.open){closeDialog(overlay);}
+ main
       scheduleEnding(data.reply);
     }else if(!endingTimer)openEnding();
   }

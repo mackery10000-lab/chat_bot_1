@@ -212,9 +212,11 @@ def free_dialogue_context(npc, state):
                   mood=character_mood(npc, flags),
                   public_facts=public_dialogue_facts(npc, state),
                   relationship="상대는 이 열차에서 처음 만난 승객이며 첫인사는 방금 나눴다. 예전에 만난 적은 없다.")
+
     if npc == "explorer" and not flags.get("explorer_case_known"):
         result["known_facts"] = [fact for fact in result["known_facts"]
                                  if not re.search(r"실종|사라진|사라졌", fact)]
+
     if npc == "cleaner" and not flags.get("elder_features"):
         result["conversation_boundary"] = "커피를 청소하느라 바쁘다. 분실물이나 승차권 이야기를 먼저 꺼내거나 외형 설명을 요구하거나 노인에게 분실물을 물어보라고 안내하지 않는다."
     return result
@@ -288,6 +290,7 @@ def approve_free_reply(reply, npc, mode, state, question=""):
     if (npc == "cleaner" and not state.get("flags", {}).get("elder_features")
             and re.search(r"분실|승차권|잃어버|물건.{0,20}(?:모양|특징|외형)|(?:모양|특징|외형).{0,20}(?:설명|말씀)", value)):
         return "손님, 지금은 커피를 닦느라 바쁘답니다. 바닥이 젖었으니 잠시 비켜 주시겠어요?"
+
     # Exact earned facts may be repeated, while every surrounding clause still
     # passes the existing output guard. Unlocking a noun never unlocks arbitrary
     # claims about that noun, a different station, an item handover, or a grant.
@@ -301,6 +304,7 @@ def approve_free_reply(reply, npc, mode, state, question=""):
         return fallback
     if npc == "explorer" and not state.get("flags", {}).get("explorer_case_known") and re.search(r"실종|사라진\s*열차|열차.{0,20}사라졌", checked):
         return fallback
+
     # Quotation marks are harmless; markdown, lists, stage directions, and speaker
     # role labels would turn an NPC response into narration or instructions.
     if re.search(r"(?:^|\n)\s*(?:#{1,6}\s|[-*]\s|\d+[.)]\s|(?:assistant|system|user|narrator)\s*:)|[{}\[\]<>]|\*\*", value, re.I):

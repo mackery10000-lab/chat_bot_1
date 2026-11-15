@@ -865,13 +865,17 @@ class GameEngine:
             if topic == "restroom":
                 return self.result(
                     "화장실에 가시려는 거군요. 이동하실 때는 객차가 흔들릴 수 있으니 손잡이를 잡고 조심해 주십시오.",
+
                     npc, ui={"dialogue_mode": "non_mutating"},
+
                 )
             if topic == "year":
                 year = "2026년이라고요…? 저는 2016년에 근무를 시작했습니다. 믿기 어렵습니다." if "2026" in intent.get("quote", "") else "2016년입니다. 출발할 때도 그렇게 확인했습니다."
                 permission = " 약속대로 기관실 출입을 도와드리겠습니다." if f.get("engine_permission") else ""
+
                 return self.result(year + " 제 시계는 계속 23시 59분입니다." + permission, npc, ["attendant_rule"],
                                    ui={"dialogue_mode": "non_mutating"})
+
             if f.get("engine_permission"):
                 return self.result(
                     "도와주셔서 감사합니다. 약속대로 기관실 문을 열어두었습니다. 조심해서 들어가십시오.",

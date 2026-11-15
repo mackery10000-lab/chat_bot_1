@@ -404,6 +404,11 @@ class DemoGenerator:
             max_output_tokens=max_output_tokens or (1200 if schema else 900),
             store=False,
         )
+        
+        if model.strip() == "gpt-6-luna":
+            effort = os.getenv("OPENAI_REASONING_EFFORT") or values.get("OPENAI_REASONING_EFFORT") or "none"
+            options["reasoning"] = {"effort": effort}
+  
         if model.strip().startswith(("gpt-4o", "gpt-4.1")):
             options["temperature"] = 0 if schema else 0.4
         if schema:
@@ -579,7 +584,9 @@ lore/smalltalk/deflect/confusion은 반드시 intent=talk, mode=act, dialogue_ch
                 candidates = [key for key, pattern in aliases.items() if re.search(pattern, previous)]
             if len(candidates) == 1:
                 result["target"] = candidates[0]
+
             if result["intent"] != "present" and result["mode"] == "act" and result["target"] in ("notice", "facility_manual", "newspaper", "route_report", "ticket_old", "ticket_current", "elder_testimony", "faded_paper", "punched_receipt", "desk") and re.search(r"읽|살펴|조사", final):
+
                 result["intent"] = "inspect"
         if result["intent"] == "talk":
             if "appearance" in result.get("requested_facts", []) or re.search(r"(?:승차권|표|분실물).{0,20}(?:어떻게\s*생|모양|외형|특징)", final):
