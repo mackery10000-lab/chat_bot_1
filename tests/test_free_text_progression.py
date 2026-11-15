@@ -197,6 +197,10 @@ class FreeTextProgressionTest(GameTestCase):
         for suffix, topic in ((".entry.stop", "stop"), (".destination.station", "destination"),
                               (".password.password", "password"), (".proof.evidence", "year")):
             with self.subTest(choice=suffix):
+                if suffix == ".proof.evidence":
+                    # The current UI deliberately requires a calendar-year
+                    # claim before offering the evidence inventory.
+                    self.claim_year()
                 self.assert_choice_text_parity(suffix, topic)
         self.assertTrue(self.flags()["driver_explained"])
         self.assertFalse(self.flags().get("year_proven"))
@@ -399,7 +403,9 @@ class FreeTextProgressionTest(GameTestCase):
         self.t("driver", "password")
         before = protected_state(self.state())
         self.say("정말 지금은 2026년이니 제 말을 믿어주세요.", "year", dialogue_mode="lore")
-        self.assertEqual(protected_state(self.state()), before)
+        expected = deepcopy(before)
+        expected["flags"]["year_claimed"] = True
+        self.assertEqual(protected_state(self.state()), expected)
         self.assertFalse(self.flags().get("year_proven"))
         self.assertFalse(self.data["game"]["controls"]["control"])
         self.assertIsNone(self.data["game"]["confirmation"])

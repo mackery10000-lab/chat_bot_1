@@ -6,6 +6,7 @@ the current utterance, then lets the existing engine enforce every prerequisite.
 """
 
 import re
+from dataclasses import dataclass
 
 from .dialogue_policy import FREE_DIALOGUE_MODES, is_setting_attack
 
@@ -14,7 +15,7 @@ _SHORT_REPLY = re.compile(
     r"\s*(?:네|예|응|아니요|아뇨|아니|그래요|맞아요|맞습니다|좋아요|좋습니다|알겠습니다|그렇습니다|그렇죠|그럼요|알겠어요|그러죠)[.!?,~\s]*"
 )
 _YES = re.compile(r"\s*(?:네|예|응|그래요|맞아요|맞습니다|좋아요|좋습니다|알겠습니다|그렇습니다|그렇죠|그럼요|알겠어요|그러죠)[.!?,~\s]*")
-_PROFILE = re.compile(r"나이|연세|몇\s*살|경력|근무|직업|취미|월급|연봉|휴가|식사|끼니|레시피|요리|코딩|수학|평소|보통|즐겨")
+_PROFILE = re.compile(r"나이|연세|몇\s*살|경력|근무|직업|취미|월급|연봉|휴가|식사|끼니|레시피|요리|코딩|수학|평소|보통|즐겨|화장실|용변|날씨|배고|음식")
 _SCOPE = {
     "case": r"열차|기차|실종|신문|사건|기사|사라|갇|내리|하차|나갈|나오|벗어나",
     "loop": r"반복|순환|되풀이|(?:같은|똑같은).{0,12}(?:곳|풍경|선로|터널|다리|구간)|계속.{0,15}(?:달리|돌|지나)|시계|시간.{0,12}(?:멈|안\s*가|돌)|멈추지|안\s*멈|도착하지",
@@ -43,6 +44,104 @@ _ACTION_SCOPE = {
     "accept": r"도와|돕|수락|부탁|의뢰|임무|문.{0,12}열",
     "end_talk": r"대화|그만|주변|마칠|마치",
 }
+
+# Only the currently exposed node is projected. These annotations describe
+# existing authored questions; effects, rewards and next nodes remain in JSON.
+_AUTHORED_TOPICS = {
+    ("explorer", "entry"): "identity",
+    ("explorer", "oddity"): "case",
+    ("explorer", "same_train"): "case",
+    ("explorer", "evidence"): "case",
+    ("explorer", "more"): "loop",
+    ("elder", "entry"): "other",
+    ("elder", "search"): "lost_ticket",
+    ("elder", "last_seen"): "lost_ticket",
+    ("elder", "nearby"): "lost_ticket",
+    ("elder", "waiting"): "background",
+    ("attendant", "entry"): "warning",
+    ("attendant", "where"): "permission",
+    ("attendant", "stop"): "stop",
+    ("attendant", "need"): "permission",
+    ("attendant", "persuade"): "permission",
+    ("driver", "destination"): "destination",
+}
+
+
+def choice_semantics(npc, stage, option):
+    """Read-only metadata, never a second definition of an event's effects."""
+    semantic = dict(option.get("effect", {}))
+    semantic.setdefault("type", "dialogue")
+    semantic.setdefault("topic", _AUTHORED_TOPICS.get((npc, stage), "other"))
+    if semantic["type"] == "introduce":
+        semantic["topic"] = "case"
+    elif semantic["type"] == "anomaly":
+        semantic["topic"] = "loop"
+    elif semantic["type"] == "offer":
+        semantic["topic"] = "help"
+    elif semantic["type"] == "read_item":
+        semantic["topic"] = "case" if semantic.get("target") == "newspaper" else "lost_ticket"
+    elif semantic["type"] == "present":
+        semantic["topic"] = "lost_ticket" if semantic.get("target") == "ticket_old" else "help"
+    elif semantic["type"] == "compose":
+        semantic["topic"] = "appearance" if npc == "cleaner" else "year"
+    elif semantic["type"] == "inventory":
+        semantic["topic"] = "year"
+    elif semantic["type"] == "control":
+        semantic["topic"] = "password"
+    semantic["requires_explicit_action"] = bool(
+        semantic.get("accept") or semantic["type"] in
+        ("read_item", "present", "select_npc", "compose", "inventory", "control")
+        or semantic.get("topic") == "departure")
+    return semantic
+
+
+def answer_expectation(npc, stage, pending, last_mode, choices):
+    """Derive short-answer focus without changing persistent quest obligations."""
+    focused = last_mode not in FREE_DIALOGUE_MODES + ("non_mutating", "clarification")
+    kind = {"crew_help": "mission_offer", "explorer_tools": "investigation_offer",
+            "confirm_description": "confirm_description"}.get(pending, "question")
+    if npc == "attendant" and stage == "anomaly":
+        kind = "acknowledge_anomaly"
+    accepts = any(c.get("semantic", {}).get("accept") for c in choices)
+    return {"kind": kind, "topics": list(dict.fromkeys(
+        c.get("semantic", {}).get("topic", "other") for c in choices)),
+        "allows_short_accept": focused and (kind != "question" or accepts)}
+
+
+@dataclass(frozen=True)
+class DialogueRoute:
+    """Internal execution decision. It contains no state mutation authority."""
+    source: str
+    actor_id: str
+    candidate_choice_id: str
+    execution_mode: str
+    evidence_span: str
+    validation_status: str
+    validated_intent: dict
+    rejection_reason: str = ""
+
+
+def resolve_dialogue_route(value, message, context):
+    supplied = value.get("dialogue_choice_id", "")
+    current = next((c for c in context.get("dialogue_choices", [])
+                    if c["id"] in (supplied, "story." + supplied)), None) if supplied else None
+    if (supplied and current is None and value.get("dialogue_mode", "scenario") not in FREE_DIALOGUE_MODES
+            and value.get("mode") in ("act", "question")
+            and value.get("intent") in ("talk", "accept") and not _nonexecution(message)):
+        return DialogueRoute("free_text", context.get("active_npc", ""), supplied,
+                             value.get("mode", ""), message, "CLARIFICATION_REQUIRED",
+                             dict(value), "stale_choice")
+    quote = value.get("quote", "")
+    if quote and quote not in message:
+        value = dict(value, mode="unclear", dialogue_mode="scenario", dialogue_choice_id="")
+    validated = ground_dialogue_route(value, message, context)
+    mode = validated.get("mode", "unclear")
+    status = ("CLARIFICATION_REQUIRED" if mode == "unclear" else
+              "NON_MUTATING" if mode in ("negated", "reported", "hypothesis")
+              or validated.get("dialogue_mode") in FREE_DIALOGUE_MODES else "COMMITTABLE")
+    return DialogueRoute("free_text", validated.get("target", ""),
+                         validated.get("dialogue_choice_id", ""), mode,
+                         quote if quote and quote in message else message, status, validated)
 
 
 def _nonexecution(message):
@@ -91,7 +190,7 @@ def ground_dialogue_route(value, message, context):
     message = message if isinstance(message, str) else ""
     if value.get("dialogue_mode") == "confusion" or is_setting_attack(message):
         return _free(value, context, "confusion")
-    if context.get("last_dialogue_mode") in FREE_DIALOGUE_MODES and _SHORT_REPLY.fullmatch(message):
+    if context.get("last_dialogue_mode") in FREE_DIALOGUE_MODES + ("non_mutating", "clarification") and _SHORT_REPLY.fullmatch(message):
         return _free(value, context, "smalltalk")
 
     blocked = _nonexecution(message)
@@ -110,17 +209,29 @@ def ground_dialogue_route(value, message, context):
     current = next((choice for choice in context.get("dialogue_choices", [])
                     if choice.get("id") == supplied or choice.get("id") == "story." + supplied), None) if supplied else None
     semantic = current.get("semantic", {}) if current else {}
-    actual_action = (value.get("intent") == "accept" or semantic.get("accept")
-                     or semantic.get("type") in ("present", "read_item", "introduce", "anomaly", "select_npc")
+    if supplied and current is None and value.get("dialogue_mode", "scenario") not in FREE_DIALOGUE_MODES:
+        # Preserve the invalid candidate for the execution boundary to reject;
+        # silently dropping it could execute a different legacy reward route.
+        return dict(value)
+    actual_action = (value.get("intent") == "accept" or semantic.get("requires_explicit_action") or semantic.get("accept")
+                     or semantic.get("type") in ("present", "read_item", "select_npc")
                      or (semantic.get("type") == "talk" and semantic.get("topic") == "departure"))
     if value.get("mode") == "question" and actual_action:
         # Information questions may advance their authored dialogue. Asking
         # whether to accept, present, read, or investigate is not that action.
         return dict(value, mode="hypothesis", dialogue_mode="scenario", dialogue_choice_id="")
 
-    if value.get("dialogue_mode", "scenario") not in FREE_DIALOGUE_MODES:
-        return value
     kind, topic = value.get("intent"), value.get("topic")
+    # An item action may have an item target, rather than the active NPC. When
+    # it is the same *current* authored action, execute that event's next node.
+    item_candidates = [choice for choice in context.get("dialogue_choices", [])
+                       if ((kind == "inspect" and choice.get("semantic", {}).get("type") == "read_item")
+                           or (kind == "present" and choice.get("semantic", {}).get("type") == "present"))
+                       and choice.get("semantic", {}).get("target") == value.get("target")
+                       and (not value.get("recipient") or value["recipient"] == context.get("active_npc"))]
+    if len(item_candidates) == 1 and value.get("mode") == "act" and re.search(_ACTION_SCOPE[kind], message):
+        return dict(value, intent="talk", target=context.get("active_npc", ""), recipient="",
+                    dialogue_mode="scenario", dialogue_choice_id=item_candidates[0]["id"])
     if kind in _EXECUTABLE - {"accept", "describe"} and value.get("mode") == "act" and re.search(_ACTION_SCOPE[kind], message):
         # Objects and destinations are valid action targets, not remote NPCs.
         # Ownership, location, item reads and UI-only operation still belong to
@@ -139,11 +250,11 @@ def ground_dialogue_route(value, message, context):
             if anomaly:
                 return dict(value, intent="talk", target=npc, recipient="", mode="act",
                             dialogue_mode="scenario", dialogue_choice_id=anomaly["id"])
-        if expectation.get("allows_short_accept") or context.get("pending_dialogue") in ("crew_help", "explorer_tools", "confirm_description"):
+        if expectation.get("allows_short_accept") or (not expectation and context.get("pending_dialogue") in ("crew_help", "explorer_tools", "confirm_description")):
             return dict(value, intent="accept", target=npc, recipient="", mode="act", dialogue_mode="scenario")
         if current and semantic.get("type") == "anomaly":
             return dict(value, target=npc, mode="act", dialogue_mode="scenario", dialogue_choice_id=current["id"])
-        return value
+        return _free(value, context, "smalltalk")
 
     scoped = _scoped(topic, message)
     normalized = lambda text: re.sub(r"[\s.!?。！？]+", "", text)
@@ -155,16 +266,42 @@ def ground_dialogue_route(value, message, context):
     # become a second, narrower language parser. Personal/off-topic questions
     # cannot use an incidental ID to consume a pending story answer.
     story_subject = topic in _PROGRESS_TOPICS or topic in ("other", "greeting")
-    choice_scoped = current and (authored_clause or (
-        compatible and story_subject and not _PROFILE.search(message)
+    action_evidence = True
+    if semantic.get("type") == "introduce":
+        action_evidence = _scoped("case", message)
+    elif semantic.get("topic") == "departure":
+        action_evidence = _scoped("departure", message)
+    elif semantic.get("type") in ("read_item", "present", "control", "inventory", "compose", "select_npc"):
+        pattern = {"read_item": _ACTION_SCOPE["inspect"], "present": _ACTION_SCOPE["present"],
+                   "control": r"직접|입력|조작|제어", "inventory": r"보관함|소지품|자료|살펴|펼쳐",
+                   "compose": r"직접|설명|말하|말씀|대답", "select_npc": r"대화|말을?\s*걸|물어"}[semantic["type"]]
+        action_evidence = bool(re.search(pattern, message))
+    choice_scoped = current and kind in ("talk", "accept") and (authored_clause or (
+        compatible and story_subject and not _PROFILE.search(message) and action_evidence
     ))
     if choice_scoped:
         return dict(value, intent="talk", target=npc, recipient="", dialogue_mode="scenario",
                     dialogue_choice_id=current["id"], mode="act")
+    # A valid ID can still be an unrelated semantic guess. Drop it even when
+    # the classifier called that guess 'scenario'. Future IDs are never run.
+    if supplied:
+        value = dict(value, dialogue_choice_id="")
+        if current and value.get("dialogue_mode", "scenario") == "scenario":
+            value = dict(value, dialogue_mode="lore")
     if kind in _EXECUTABLE and value.get("mode") == "act" and re.search(_ACTION_SCOPE[kind], message):
         # Structured actions still go through the original engine; operate can
         # only explain the dedicated UI and cannot pull a lever through text.
-        return dict(value, dialogue_mode="scenario")
+        return dict(value, dialogue_mode="scenario", dialogue_choice_id="")
+    # Match an unambiguous current effect by its supplied semantic subject.
+    # Never manufacture or execute a future choice to repair a missing ID.
+    if not supplied and kind in ("talk", "accept") and scoped and not _PROFILE.search(message):
+        candidates = [c for c in context.get("dialogue_choices", [])
+                      if c.get("semantic", {}).get("topic") == topic
+                      and c.get("semantic", {}).get("type") in ("talk", "introduce", "offer", "anomaly")
+                      and not (c.get("semantic", {}).get("accept") and kind != "accept")]
+        if len(candidates) == 1:
+            return dict(value, intent="talk", target=npc, dialogue_mode="scenario",
+                        dialogue_choice_id=candidates[0]["id"])
     if kind == "talk" and scoped and topic != "warning":
         return dict(value, dialogue_mode="scenario", dialogue_choice_id="")
     return value

@@ -21,6 +21,35 @@ from services.generator import AIUnavailable, DemoGenerator
 
 class OfflineModel:
     def interpret(self, message, context):
+        samples = {
+            "열차에 탔는데 계속 내릴 수가 없어요.": ("talk", "case", "lore", ""),
+            "앞쪽 객차는 제가 직접 조사해 보겠습니다.": ("talk", "departure", "smalltalk", ""),
+            "누렇게 바랜 종이입니다.": ("describe", "appearance", "lore", ""),
+            "구멍이 뚫린 표입니다.": ("describe", "appearance", "scenario", ""),
+            "누렇게 바랜 종이에 구멍이 뚫린 승차권입니다.": ("describe", "appearance", "scenario", ""),
+            "찾은 승차권을 돌려드리겠습니다.": ("present", "lost_ticket", "lore", "ticket_old"),
+            "화장실에 가고 싶어요.": ("talk", "permission", "scenario", ""),
+            "열차가 계속 달리고 멈추지 않아요.": ("talk", "stop", "smalltalk", ""),
+            "기관실로 들어가 봐야겠습니다.": ("talk", "permission", "scenario", ""),
+            "승무원실 문을 열고 서류를 찾아드리겠습니다.": ("accept", "help", "lore", ""),
+            "네.": ("accept", "help", "scenario", ""),
+        }
+        if message in samples:
+            kind, topic, mode, target = samples[message]
+            choice_id = ""
+            if message == "기관실로 들어가 봐야겠습니다.":
+                choice_id = next((c["id"] for c in context["dialogue_choices"]
+                                  if c.get("semantic", {}).get("topic") == "permission"), "")
+            elif message == "화장실에 가고 싶어요." and context["dialogue_choices"]:
+                # Deliberately wrong classifier ID: the real resolver must
+                # preserve the passenger's actual bathroom request.
+                choice_id = context["dialogue_choices"][0]["id"]
+            return dict(intent=kind, target=target or context["active_npc"],
+                        recipient=context["active_npc"] if kind == "present" else "",
+                        topic=topic, dialogue_mode=mode, mode="act", quote=message,
+                        affirmed_features=[], denied_features=[], described_item="ticket_old",
+                        referent_relation="same", feature_evidence=[], requested_facts=[],
+                        dialogue_choice_id=choice_id)
         if message != "입력창 확인":
             raise AssertionError("The browser regression must not call a live model")
         return dict(intent="talk", target=context["active_npc"], topic="off_topic",
@@ -97,6 +126,10 @@ def seed_dialogue():
                               door_open=True, report_found=True, report_read=True,
                               ticket_recovered=True, old_ticket_read=True,
                               ticket_returned=True, engine_permission=True)
+        # This layout fixture represents a passenger who has already made the
+        # year claim. Evidence proof remains unsubmitted; real claim gating is
+        # covered by the API regression and parity suites.
+        state["flags"]["year_claimed"] = True
         state["read"].append("route_report")
     if npc == "cleaner":
         state["flags"]["elder_features"] = True

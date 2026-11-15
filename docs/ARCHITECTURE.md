@@ -17,6 +17,13 @@
 위치·소유·열람·최종 확인은 계속 엔진이 담당한다. 공개된 사실만 읽기 전용
 `public_dialogue_facts`로 자유 응답에 제공한다. [규칙과 검증](FREE_TEXT_PROGRESSION.md)을 따른다.
 
+2026-11-12 상호운용 보완: 현재 선택지의 `effect`와 대화 노드에서 실행 의미를
+계산하고, `answer_expectation`으로 장기 의뢰와 직전 답변 대상을 구분한다.
+`resolve_dialogue_route`는 원문 근거와 현재 후보를 검증한 내부 `DialogueRoute`를
+반환한다. 검증된 선택지는 클릭과 같은 `choose → _choose_scenario`를 실행한다.
+잘못된 미래 선택지는 기존 409 오류를 유지하고, 가정·거절·인용은 진행 없이
+인물이 되묻는다. 상세 설계와 보존 검사는 [상호운용 검증](DIALOGUE_INTEROPERABILITY.md)에 기록한다.
+
 화면 클릭의 select_npc·present·end_talk·operate·read_item도 자유 채팅과 같은 엔진을 쓴다. 화면에서 정한 행동을 다시 AI 해석에 보내지 않는다. select_npc는 첫 인사를 즉시 반환하고 화자를 보존한다.
 
 요청 본문은 message 또는 action 중 하나다. 응답은 기존 reply·image·sources와 game·scene·ui·events를 유지한다. sources는 허용 자료 제목으로서 문장별 인용을 뜻하지 않는다. ui.ignored의 빈 reply는 불가능한 행동을 의도적으로 무시한 경우이며 API 실패와 다르다.

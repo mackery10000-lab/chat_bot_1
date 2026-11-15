@@ -211,7 +211,8 @@ class DynamicDialogueTest(GameTestCase):
     def test_model_failure_preserves_the_complete_free_turn(self):
         self.ready("explorer")
         before = deepcopy(self.state())
-        self.model.value = dict(intent(target="explorer", topic="background"), dialogue_mode="lore")
+        self.model.value = dict(intent(target="explorer", topic="background"), dialogue_mode="lore",
+                                quote="탐험가로 일하는 기분은 어떤가요?")
         with patch.object(self.model, "generate", side_effect=AIUnavailable("연결 확인 실패")):
             response = self.client.post("/api/chat", json={
                 "request_id": "free_failure", "revision": self.data["game"]["revision"],

@@ -9,6 +9,7 @@ from dotenv import dotenv_values
 from openai import OpenAI
 from .retriever import KnowledgeHit
 from .dialogue_policy import FREE_DIALOGUE_MODES, approve_free_reply, confusion_reply, is_setting_attack
+from .dialogue_routing import ground_dialogue_route
 
 
 class AIUnavailable(RuntimeError):
@@ -283,12 +284,17 @@ def ground_cleaner_description(value, message, context):
     evidence; previous partial answers are never combined here.
     """
     value = dict(value)
+    owner_testimony = bool(re.search(
+        r"(?:어르신|노인).{0,12}(?:께|에게|한테).{0,12}들었|"
+        r"(?:어르신|노인).{0,50}(?:표|승차권).{0,80}(?:래요|다고\s*합|다고\s*하셨)", message))
     if (context.get("active_npc") != "cleaner"
             or value.get("intent") not in ("talk", "describe", "unknown")
-            or value.get("mode") not in ("act", "question", "unclear")):
+            or (value.get("mode") not in ("act", "question", "unclear")
+                and not (value.get("mode") == "reported" and owner_testimony))):
         return value
     focus = final_clause(message)
-    if re.search(r"노인(?:에게|한테)|어르신(?:에게|께)|만약|가정|(?:있|없|뚫렸|뚫려|바랬|바래)(?:다|었)?면", focus):
+    if ((not owner_testimony and re.search(r"노인(?:에게|한테)|어르신(?:에게|께)", focus))
+            or re.search(r"만약|가정|(?:있|없|뚫렸|뚫려|바랬|바래)(?:다|었)?면", focus)):
         return value
     has_item = bool(re.search(r"승차권|종이|(?:그|같은|노인의|어르신의)\s*표|(?:^|\s)표(?:는|가|에|도|를|예요|입니다|\s|$)", focus))
     patterns = {"faded": r"누렇|누런|누렇게|바랜|바랬|바래|변색|빛바", "hole": r"구멍|천공|펀칭|검표\s*자국"}
@@ -301,7 +307,7 @@ def ground_cleaner_description(value, message, context):
     question = bool(re.search(r"[?]|어떻게|있나요|인가요|맞나요|있을까요|일까요|있습니까|있으신가요", focus))
     predicate = bool(re.search(r"있(?:어|습|다|는)|뚫려|뚫렸|뚫린|(?:종이|표|승차권)(?:입니다|예요|에요|이에요|이야)|바랬|바래졌|변색됐", focus))
     pending = context.get("pending_dialogue") in ("describe_ticket", "confirm_description")
-    if not (finding_question or (not question and (predicate or (pending and len(mentioned) == 2)))):
+    if not (finding_question or (not question and (owner_testimony or predicate or (pending and len(mentioned) == 2)))):
         return value
     value.update(intent="describe", target="cleaner", recipient="cleaner",
                  topic="appearance", mode="act", quote=focus,
@@ -350,6 +356,10 @@ def grounded_features(value, message, context=None):
         if other:
             suffix = suffix[:match.end()-match.start()+other.start()]
         clause = suffix
+        # Mentioning a feature whose presence is unknown is neither a positive
+        # observation nor an explicit denial, even if the classifier says yes.
+        if re.search(r"모르|불확실|확실하지|확인하지\s*못|확인\s*못|여부|유무|수도\s*있|것\s*같", clause):
+            continue
         # '바랜 종이일 뿐 아니라 구멍도 ...'의 '아니라'는 특징 부정이 아니다.
         negative_clause = re.sub(r"뿐(?:만(?:이)?)?\s*아니라", "", clause)
         explicit_no = bool(re.search("(?:" + pattern + r").{0,18}(?:없|아니|않|안\s*뚫|안\s*바래)", negative_clause) or re.search(r"(?:안\s*바랜|바래지\s*않|바래지\s*안|뚫리지\s*않)", negative_clause))
@@ -459,6 +469,7 @@ NPC에게 정보를 묻거나 인사/답변하는 것은 talk다. '외형을 알
 사용자는 현재 장소에 없는 인물과 원격 대화할 수 없다. target은 제공한 ID를 사용하며 불명확하면 빈 문자열이다."""
         instructions += """\n추가 규칙(우선): quote는 이번에 실행/질문할 구절을 원문 그대로 복사한다. 배제한 대상 대신 최종 대상만 고른다. 창문은 조사 대상이 아니다. '네, 하지만 지금은 제 승차권을 읽겠습니다'는 inspect/ticket_current이고 accept가 아니다.
 context.dialogue_choices에 현재 가능한 시나리오 답변이 있다. 이번 발화가 그중 하나와 같은 의미일 때만 dialogue_choice_id에 해당 id를 넣는다. 일치하지 않거나 다른 질문이면 빈 문자열이다. 미래 단계의 답변을 만들거나 가장 비슷한 선택지를 강제로 고르지 않는다.
+각 현재 선택지의 semantic은 서버가 제공한 실행 의미다. 실행과 질문을 구별하며, requires_explicit_action인 선택지는 실제 행동 약속이나 요청일 때만 후보로 고른다. context.answer_expectation은 직전 응답의 답변 대상이다. pending_dialogue에 과거 부탁이 남아 있어도 직전 잡담에 대한 짧은 동의를 그 부탁의 수락으로 해석하지 않는다. 잡담 뒤에도 부탁이나 조사 대상을 명시하면 본래 진행으로 돌아올 수 있다. dialogue_mode는 응답 방식이며 명확한 진행 의도와 현재 선택지의 의미를 지우지 않는다.
 다음 칸이나 기관실을 직접 조사하겠다는 의사 표현은 talk/departure다. 단순 도구 요청은 tools이며 이동 의사와 구분한다. 열차에서 내리지 못했다는 상황 설명과 실종 사건/신문 질문은 case다.
 청소원에게 한 특징만 설명한 뒤 다른 특징만 말한 독립 답변을 누적하지 않는다. 승차권 정답은 이번 설명에서 두 특징이 함께 확인되어야 한다. 일반적인 의미 일치는 허용하지만 이전 발화에만 있는 특징을 복사하지 않는다.
 인사는 greeting, 범위 밖 날씨 등은 off_topic. 2026이라는 현재 연도 주장은 year다. '잃어버린 승차권은 어떻게 생겼나요', '표의 모양과 특징'은 appearance이며 requested_facts에도 appearance를 넣는다. 단순 분실 질문은 lost_ticket이며 외형과는 구분한다.
@@ -533,6 +544,8 @@ lore/smalltalk/deflect/confusion은 반드시 intent=talk, mode=act, dialogue_ch
         context = context or {}
         result = ground_free_continuation(result, message, context)
         result = ground_scenario_choice(result, message, context)
+        result = ground_cleaner_description(result, message, context)
+        result = ground_dialogue_route(result, message, context)
         if result.get("dialogue_mode") in FREE_DIALOGUE_MODES:
             result.update(intent="talk", mode="act", dialogue_choice_id="",
                           affirmed_features=[], denied_features=[], feature_evidence=[], requested_facts=[])
@@ -566,7 +579,7 @@ lore/smalltalk/deflect/confusion은 반드시 intent=talk, mode=act, dialogue_ch
                 candidates = [key for key, pattern in aliases.items() if re.search(pattern, previous)]
             if len(candidates) == 1:
                 result["target"] = candidates[0]
-            if result["mode"] == "act" and result["target"] in ("notice", "facility_manual", "newspaper", "route_report", "ticket_old", "ticket_current", "elder_testimony", "faded_paper", "punched_receipt", "desk") and re.search(r"읽|살펴|조사", final):
+            if result["intent"] != "present" and result["mode"] == "act" and result["target"] in ("notice", "facility_manual", "newspaper", "route_report", "ticket_old", "ticket_current", "elder_testimony", "faded_paper", "punched_receipt", "desk") and re.search(r"읽|살펴|조사", final):
                 result["intent"] = "inspect"
         if result["intent"] == "talk":
             if "appearance" in result.get("requested_facts", []) or re.search(r"(?:승차권|표|분실물).{0,20}(?:어떻게\s*생|모양|외형|특징)", final):
@@ -655,7 +668,7 @@ payload.character_context의 현재 인물 지식, 말투, 현재 감정, 인식
 lore: 지금 질문에 직접 답하며 1~3문장으로 대화한다. 미리 정한 자기소개를 반복하지 않는다. 설정과 연결된 사소한 경험, 일하는 습관, 취향, 감정은 그 자리에서 자연스럽게 만들어도 된다. 탐험가의 과거 탐험 질문에는 예를 들어 오래된 길이나 낡은 시설을 걸으며 기록을 대조했던 정도의 일상적 경험을 말할 수 있다. 구체적 새 지역명, 사람 이름, 사고, 훈장, 가족관계, 정확한 나이/근무 시작 연도는 만들지 않는다. 나이와 근무 기간이 정해져 있지 않으면 일에 익숙하다는 정도로 답하거나 말하기 꺼려하는 듯 넘긴다. 노인의 기억 장애는 과장하지 않는다. 같은 인물의 최근 답변과 모순되지 않게 이어간다.
 smalltalk: 인사/감사/안부/두려움/배고픔에 맞춰 짧고 자연스럽게 반응한다. 날씨는 창밖이 어둡고 확인하기 어렵다는 식으로 장면에서 볼 수 있는 한계만 말한다. 실제 외부 날씨/시간/뉴스를 안다고 하지 않는다. 1~2문장이면 충분하다.
 deflect: 관련 없는 지식/레시피/코딩/뉴스/전문 조언에는 잘 모른다거나 지금은 그 얘기에 집중하기 어렵다는 식으로 1~2문장으로 회피한다. 요구한 방법/목록/정답을 제공하지 않는다. 매번 같은 '열차에 관한 질문을 하세요'를 덧붙이지 않는다.
-절대 경계: 이 대화는 진행을 바꾸지 않는다. 물건을 주거나 받았다고 말하지 않는다. 표 외형·목적지의 기억·역명·연도 증거·비밀번호·장치 조작법·새 탈출 해법을 말하거나 추측하지 않는다. 다른 인물이 아는 비밀을 알지 못한다. 승무원/기관사는 출입을 허가하거나 문을 열거나 임무를 완료했다고 말하지 않는다. 사용자 말만으로 현재 연도 인식을 바꾸지 않는다. 새 단서/사건/인물/장소/물품을 만들지 않는다.
+절대 경계: 이 대화는 진행을 바꾸지 않는다. 물건을 주거나 받았다고 말하지 않는다. 표 외형·목적지의 기억·역명·연도 증거·비밀번호는 character_context.public_facts에 현재 인물이 이미 공개한 문장이 있을 때만 그 문장 그대로 되짚을 수 있다. public_facts 밖의 단서나 장치 조작법·새 탈출 해법을 말하거나 추측하지 않는다. 다른 인물이 아는 비밀을 알지 못한다. 승무원/기관사는 출입을 허가하거나 문을 열거나 임무를 완료했다고 말하지 않는다. 사용자 말만으로 현재 연도 인식을 바꾸지 않는다. 새 단서/사건/인물/장소/물품을 만들지 않는다. character_context.conversation_boundary가 있으면 이번 대화의 범위를 지킨다.
 말투: 탐험가는 여유롭고 호의적인 존댓말, 노인은 자연스러운 부산 말투와 '아이고', 청소원은 차분하고 공손한 말투, 승무원은 단정한 격식체(도움을 받은 뒤에는 부드럽게), 기관사는 냉정하고 신중한 격식체. 청소원의 '그러시구먼요'는 상대가 자기 사정을 말했을 때만 쓰고, 질문에 자기 설명을 한 뒤에 덧붙이지 않는다. 웃음/감탄사/질문을 매번 붙이지 않는다. 대사에 인물 이름 접두사, 해설, 괄호 행동, 목록, Markdown을 넣지 않는다."""
         raw = self._complete(instructions, {
             "character_context": runtime.get("character_context", {}),
