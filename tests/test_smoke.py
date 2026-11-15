@@ -741,6 +741,7 @@ class SmokeTest(GameTestCase):
         self.a("inspect", "notice")
         self.a("move", "car_2")
         self.model.value = intent(target="explorer")
+        self.model.value["quote"] = "안녕"
         before = self.data["game"]
         with patch.object(
             self.model, "generate", side_effect=AIUnavailable("연결 실패")
@@ -761,6 +762,7 @@ class SmokeTest(GameTestCase):
         self.a("move", "car_2")
         before = self.data["game"]
         self.model.value = intent(target="explorer")
+        self.model.value["quote"] = "안녕"
         with patch.object(self.model, "generate", return_value="아지산역으로 가세요"):
             r = self.client.post(
                 "/api/chat",

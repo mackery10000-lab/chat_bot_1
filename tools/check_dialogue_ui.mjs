@@ -273,6 +273,100 @@ try {
     });
   }
 
+  if (!baseline && !liveApi) {
+    await scenario('mixed-choice-and-free-text-progression', async () => {
+      await resize(1440, 900);
+      const game = () => evaluate(`fetch('/api/game').then(response=>response.json()).then(data=>data.game)`);
+      const say = async text => {
+        const revision = (await game()).revision;
+        await click('#user-message', text); await cdp('Input.insertText', {text}); await click('#send-btn');
+        await until(`fetch('/api/game').then(response=>response.json()).then(data=>data.game.revision>${revision})`, 'mixed text commits');
+        await settle();
+      };
+      await navigate(base + '/qa/dialogue?npc=explorer&active=1');
+      await choose('여기에 왜 있어요?');
+      await say('열차에 탔는데 계속 내릴 수가 없어요.');
+      let state = await game();
+      checks.push({label: 'free incident shares authored newspaper event', pass: state.inventory.some(i=>i.id==='newspaper') && state.choices.some(c=>c.label==='신문을 본다.')});
+      await choose('신문을 본다.'); await click('#close-overlay'); await say('입력창 확인');
+      await choose('그게 뭔데요?');
+      await choose('그러면 이 열차가 10년 전의 열차라고 생각하시는 거예요?');
+      await choose('어떤 증거가 필요해요?'); await choose('또 알고 있는 게 있나요?');
+      await say('앞쪽 객차는 제가 직접 조사해 보겠습니다.');
+      state = await game();
+      checks.push({label: 'free investigation receives both original supplies', pass: ['flashlight','facility_manual'].every(id=>state.inventory.some(i=>i.id===id))});
+      await navigate(base + '/qa/dialogue?npc=cleaner&active=1');
+      await choose('혹시 승차권을 보셨나요?');
+      await say('누렇게 바랜 종이입니다.'); await say('입력창 확인'); await say('구멍이 뚫린 표입니다.');
+      state = await game();
+      checks.push({label: 'independent partial descriptions cannot combine into a ticket', pass: ['faded_paper','punched_receipt'].every(id=>state.inventory.some(i=>i.id===id)) && !state.inventory.some(i=>i.id==='ticket_old')});
+      await say('누렇게 바랜 종이에 구멍이 뚫린 승차권입니다.');
+      await choose('승차권을 본다.'); await click('#close-overlay');
+      await choose('노인이랑 다시 대화한다.'); await say('찾은 승차권을 돌려드리겠습니다.');
+      state = await game();
+      checks.push({label: 'read ticket returns through free text and exposes the next authored question', pass: state.choices.some(c=>c.label==='하차역 이름이 기억나세요?')});
+      await navigate(base + '/qa/dialogue?npc=attendant&active=1');
+      await say('화장실에 가고 싶어요.');
+      checks.push({label: 'bathroom request stays out of engine-room dialogue', pass: await evaluate(`document.querySelector('#dialogue-text').textContent.includes('화장실')&&!document.querySelector('#dialogue-text').textContent.includes('기관실')`)});
+      await say('기관실로 들어가 봐야겠습니다.'); await say('열차가 계속 달리고 멈추지 않아요.'); await say('기관실로 들어가 봐야겠습니다.');
+      await choose('지금 규정이 중요한 상황인가요?'); await choose('무슨 부탁이죠?');
+      await say('입력창 확인'); await say('네.');
+      state = await game();
+      checks.push({label: 'smalltalk agreement leaves the mission unaccepted', pass: state.choices.some(c=>c.label==='좋아요.')});
+      await say('승무원실 문을 열고 서류를 찾아드리겠습니다.');
+      state = await game();
+      checks.push({label: 'explicit free acceptance resumes the original mission without opening its door', pass: state.bag_hint && !state.door.open && !state.map.find(p=>p.id==='crew').open});
+      await screenshot('mixed-choice-free-text');
+    });
+    for (const [width, height] of [[1440, 900], [390, 844]]) {
+      await scenario('cleaner-description-beacon-' + width, async () => {
+        await resize(width, height);
+        const game = () => evaluate(`fetch('/api/game').then(response=>response.json()).then(data=>data.game)`);
+        const beacon = async (expected, label) => {
+          const detail = await evaluate(`(()=>{const bag=document.querySelector('#bag-btn'),art=getComputedStyle(bag.querySelector('.ui-art'));return {active:bag.classList.contains('testimony-beacon'),filter:art.filter,animation:art.animationName,shadow:getComputedStyle(bag).boxShadow};})()`);
+          checks.push({label: label + ' ' + width, pass: detail.active === expected && (!expected || (detail.filter.includes('drop-shadow') && detail.shadow === 'none')), detail});
+        };
+        const say = async text => {
+          const revision = (await game()).revision;
+          await click('#user-message'); await cdp('Input.insertText', {text}); await click('#send-btn');
+          await until(`fetch('/api/game').then(response=>response.json()).then(data=>data.game.revision>${revision})`, 'cleaner description commits');
+          await settle();
+        };
+        await navigate(base + '/qa/dialogue?npc=cleaner&active=1');
+        await beacon(false, 'testimony beacon waits for the description question');
+        await choose('혹시 승차권을 보셨나요?');
+        await beacon(true, 'description question enables silhouette glow');
+        await choose('노인에게 다시 물어본다.');
+        await beacon(false, 'elder conversation does not glow');
+        await choose('청소 직원이랑 대화한다.');
+        await beacon(true, 'returning to cleaner restores description glow');
+        const loaded = nextEvent('Page.loadEventFired');
+        await Promise.all([loaded, cdp('Page.reload')]); await settle();
+        await beacon(true, 'saved description stage restores glow after reload');
+        await choose('분실물의 모양을 직접 설명한다.');
+        await beacon(true, 'compose choice retains description glow');
+        await click('#bag-btn'); await until(`document.querySelector('#overlay')?.open===true`, 'testimony inventory opens'); await settle();
+        const card = await evaluate(`(()=>{const card=document.querySelector('.inventory-card.testimony-hint[data-item-id="elder_testimony"]');return !!card&&getComputedStyle(card.querySelector('.inventory-item-art')).filter.includes('drop-shadow');})()`);
+        checks.push({label: 'restored description highlights the testimony image ' + width, pass: card});
+        await click('.inventory-card[data-item-id="elder_testimony"]');
+        await until(`!!document.querySelector('.testimony-record')`, 'testimony detail opens'); await settle();
+        checks.push({label: 'testimony detail keeps glow and both known clues ' + width, pass: await evaluate(`!!document.querySelector('.inventory-object.testimony-hint')&&getComputedStyle(document.querySelector('.inventory-object-art')).filter.includes('drop-shadow')&&document.querySelectorAll('.testimony-record .testimony-clue').length===2`)});
+        await screenshot('cleaner-restored-testimony-' + width);
+        await cdp('Emulation.setEmulatedMedia', {features: [{name: 'prefers-reduced-motion', value: 'reduce'}]});
+        checks.push({label: 'restored testimony retains static glow with reduced motion ' + width, pass: await evaluate(`(()=>{const style=getComputedStyle(document.querySelector('.inventory-object-art'));return style.animationName==='none'&&style.filter.includes('drop-shadow');})()`)});
+        await cdp('Emulation.setEmulatedMedia', {features: []});
+        await click('#close-overlay'); await click('#end-talk'); await settle();
+        await beacon(false, 'ending the conversation clears restored glow');
+        await click('[data-npc="cleaner"]'); await settle();
+        await beacon(true, 'resuming the same description restores glow');
+        await say('누렇게 바랜 종이입니다.');
+        await beacon(true, 'partial description keeps testimony glow');
+        await say('누렇게 바랜 종이에 구멍이 뚫린 승차권입니다.');
+        await beacon(false, 'finding the real ticket clears testimony glow');
+        checks.push({label: 'restored hint does not replace the two-feature ticket condition ' + width, pass: (await game()).inventory.some(item=>item.id==='ticket_old')});
+      });
+    }
+  }
   if (!baseline) {
     await scenario('driver-resize-without-scroll', async () => {
       await resize(1440, 900); await navigate(base + '/qa/dialogue?npc=driver');

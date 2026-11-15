@@ -1,0 +1,35 @@
+{
+  "baseline_commit": "31a87be6b05de312affd4f983a3e63d41366be88",
+  "files": {
+    "config/chatbot_config.json": "0d4f2a20622421768a62912744ef3a35a5b56b2d6d6312d26b4aa65e3b533b5f",
+    "config/dialogue_scenario.json": "ee40832b70a290b1a2e6d5964645c57f2dcf875722104507b48e5b01aac2bc40",
+    "config/scene_layout.json": "0eafc993bbc08bf9aaa95aa19984c622dd6e68d24f61f7b53be69b08120b24ce",
+    "data/knowledge/character_profiles.json": "77802ad75af133d285fb368eca8e36216edbab35e9c97844a201ba3a06ae19fb",
+    "data/knowledge/example_lore.md": "ad0c7545de3037ddb65392216848958f8b5a6c32deae5e1bd61a3ede7eca370b",
+    "services/character_dialogue.py": "231b26d83a8237c92803fcf5635a319a54cd5c462c7547b076bc46154510994a",
+    "services/retriever.py": "856524132048d1cf0568fd12c9dbc2bb657483c65f5b7f22590474561982120d",
+    "app.py": "a28affda6b6c514c465376ef972666c10e2921787a4aad437b6d15fd6dc695a8",
+    "public/assets/js/chatbot.js": "0f79774fe8e931616991907fc48d21a4938fdfc1411da0ff17c1624d285692f9",
+    "public/assets/css/style.css": "c31d22453bd1aeeac4e0c4667d1865965ae902ead704ecbeb6d883b81140fbf9",
+    "templates/chat.html": "3fbe82fc04fface66ca61f41427b119bacf6f16bd3408dd6d9dbd0708c857f68"
+  },
+  "execution_contracts": {
+    "GameStore": "0cfeabe745b973d0e933b2e40ebf500fa1bb95d29f7307be3782e43395a77cce",
+    "GameEngine.can_enter": "24fc18740f27ac23694b192372c058596e688de0593dfff5a6689b06f6facc36",
+    "GameEngine.move": "71dc17823be337dc3d2f2a46da8bc131aa1be85d93048d72940ab7cde8983a7b",
+    "GameEngine.give": "543702d0ae3bbaacd52d4779e50e1eb062dd2d607d52e3545ca9fa0b9055b14d",
+    "GameEngine.mark": "207d448d3af444ebcdc173c677b7ecedf3ddd9bd86f3bea13be24f68e5f45868",
+    "GameEngine.inspect": "cfa00e39e0c1de1451df23d59acd706c12de853396f630f6eb554c3bceabd5da",
+    "GameEngine.read_item": "d9c3a4fa853850e598466a8c575d727d49484492a33f9fd65e57f02b3b0e7cd8",
+    "GameEngine.operate": "fec42fd748d6165f78723822536e2f5f29040abb44ade5dfd9199d7bd2bb0c4c",
+    "GameEngine.read_report": "8d0ba47f28de1be6e3aaf7f3229c78403e7bcc7c6a51a26e716904bc4947f2b5",
+    "GameEngine.acknowledge_document": "d63f1c12a7717ab56b51354eef5ae48221bcf0abf65b33f83d69ebbe5b890999",
+    "GameEngine.present": "a125edec1f6efda3c67fbf15329c86b79d11ae756b8182b8baae8f48fc772bc1",
+    "GameEngine.prepare_evidence": "374c39abd93eb10f4ee05535601d5c82f1d3139de5469585cd24729d13b91a3f",
+    "GameEngine.prepare_control": "0fc609aad3d4ab6453e4b07f3595517a88452cc725d3c75a84ff3d21ee228eae",
+    "GameEngine.confirm": "d6d6ed778a3f49b02914c99c7e99f6a46373102da4616d3244280c09a57fd407",
+    "GameEngine.bad": "4188532a22a27d19a6355fd63f47e19fa1e546eb869fd8dfcea4cfafca91006c",
+    "GameEngine.apply_action": "b92400a54ccef49ce247b908bdb9fa6c961f053bb701dcb2cf42d69816e20dcc"
+  },
+  "newline_policy": "Normalize text line endings for Windows/Linux checkouts; compare code as AST."
+}

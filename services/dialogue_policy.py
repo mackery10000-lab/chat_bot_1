@@ -93,10 +93,60 @@ def confusion_reply(npc):
     return _CONFUSION.get(npc, "무슨 말씀인지 잘 모르겠습니다. 다시 말씀해 주시겠어요?")
 
 
-def fallback_reply(npc, mode):
+def fallback_reply(npc, mode, question="", state=None):
     if mode == "confusion":
         return confusion_reply(npc)
+    question = _text(question)
+    facts = {row["id"]: row["text"] for row in public_dialogue_facts(npc, state or {})}
+    if re.search(r"훔|도난|도둑|범인|누가.{0,15}가져", question) and npc in ("elder", "cleaner"):
+        return ("누가 가져갔는지는 보지 못했으니 단정할 수 없네." if npc == "elder" else
+                "누가 가져갔는지는 보지 못해서 단정할 수는 없어요, 손님.")
+    stopping = re.search(r"멈|정차|세우|세워|제동", question)
+    repeating = re.search(r"순환|반복|같은.{0,15}(?:곳|구간|선로)|다음\s*역.{0,12}못", question)
+    if npc == "driver":
+        if stopping or repeating:
+            if "driver_cause" in facts:
+                answer = facts["driver_cause"]
+                if repeating and "driver_lock" in facts:
+                    answer += " " + facts["driver_lock"]
+                return answer
+            return "제동과 운행 경로 확인을 시도했지만 열차를 멈출 수 없습니다. 같은 선로가 반복되고 있습니다."
+        if re.search(r"(?:다음|어느|어떤)\s*역|목적지|어디.{0,12}(?:가|향|내리)", question) and "driver_destination" in facts:
+            return facts["driver_destination"]
+        if re.search(r"비밀번호|암호", question) and "driver_lock" in facts:
+            return facts["driver_lock"]
+    if stopping and npc == "explorer":
+        return "정차 방법은 저도 알지 못해요. 승무원이나 기관사에게 물어보시겠어요?"
+    if stopping and npc == "elder":
+        return "아이고, 열차를 세우는 방법은 내가 모르네. 승무원이나 기관사에게 물어보소."
     return _FALLBACK.get(mode, _FALLBACK["deflect"]).get(npc, "그건 잘 모르겠습니다.")
+
+
+# These are projections of existing server-authored facts, not model-supplied
+# knowledge. Neither history, inventory nor a profile can unlock a fact.
+_PUBLIC_FACTS = (
+    ("explorer", "explorer_case", ("explorer_case_known",), "2016년 23시 59분에 13-Fri 열차가 실종됐고, 2026년에 같은 번호의 열차가 나타났어요."),
+    ("explorer", "explorer_loop", (), "철교와 터널이 나타난 장소와 시간을 기록해 대조했어요. 같은 구간이 반복되고 있어요."),
+    ("elder", "elder_lost", (), "커피를 쏟고 나서 승차권을 잃어버렸네. 아직 승무원 검사도 못 받았지."),
+    ("elder", "elder_appearance", ("elder_features",), "누렇게 바랜 종이에 구멍이 뚫린 승차권이었네."),
+    ("elder", "elder_destination", ("destination_hint",), "정확한 이름은 기억나지 않지만 무슨 산이었네. 삶과 죽음의 경계라고 해서 그런 이름이 붙었다고 들었지."),
+    ("cleaner", "cleaner_lost", ("elder_features",), "분실물은 외형을 확인해야 구별해 드릴 수 있어요."),
+    ("attendant", "attendant_clock", (), "운행 시간이 한참 지났는데도 도착하지 않고 있습니다. 제 시계는 계속 23시 59분입니다."),
+    ("driver", "driver_loop", (), "같은 철교와 터널이 반복되고 있습니다. 제동과 운행 경로 확인도 시도했습니다."),
+    ("driver", "driver_destination", ("report_read",), "다음 역은 아지산역입니다."),
+    ("driver", "driver_switch", ("report_read",), "아지산역으로 향하는 분기기가 잠겨 있습니다."),
+    ("driver", "driver_cause", ("report_read",), "다음 역인 아지산역으로 가지 못해 같은 선로를 반복하고 있습니다. 그쪽 분기기가 잠겨 있습니다."),
+    ("driver", "driver_lock", ("report_read", "driver_explained"), "비밀번호는 현재 연도입니다. 2016을 입력했지만 열리지 않았습니다."),
+    ("driver", "driver_attempt", ("report_read", "driver_explained"), "입력 기회는 한 번 남았습니다."),
+    ("driver", "driver_year", ("year_proven",), "객관적인 증거로 현재가 2026년이라는 사실을 확인했습니다."),
+)
+
+
+def public_dialogue_facts(npc, state):
+    """Return independent, character-scoped facts earned by authoritative flags."""
+    flags = state.get("flags", {}) if isinstance(state, dict) else {}
+    return [{"id": key, "text": content} for owner, key, requires, content in _PUBLIC_FACTS
+            if owner == npc and all(flags.get(flag) for flag in requires)]
 
 
 # Facts with these subjects belong to condition-checked scenario dialogue. They
@@ -105,7 +155,7 @@ _SCENARIO_SUBJECT_PATTERN = (
     r"아지산|ajisan|도착역|하차역|삶과\s*죽음|생사|비밀번호|암호|분기기|분기\s*선로|잠금|레버|"
     r"바랜|바랬|누렇게|누런|빛바랜|구멍|뚫린|뚫려|천공|승차권|증언|안내서|보고서|"
     r"출입\s*허가|기관실.{0,12}(?:들어|출입|갈\s*수)|탈출|엔딩|신문.{0,20}(?:주|드리)|"
-    r"password|passcode|destination|ticket|lever|ending"
+    r"입력\s*기회|마지막.{0,8}기회|한\s*번.{0,8}남|password|passcode|destination|ticket|lever|ending"
 )
 _SCENARIO_SUBJECT = re.compile(r"목적지|" + _SCENARIO_SUBJECT_PATTERN, re.IGNORECASE)
 _REPLY_SCENARIO_SUBJECT = re.compile(_SCENARIO_SUBJECT_PATTERN, re.IGNORECASE)
@@ -160,7 +210,13 @@ def free_dialogue_context(npc, state):
               for key in ("voice", "known_facts", "unknown_facts", "improvisation")}
     result.update(npc=npc, recognized_year=_recognized_year(npc, state),
                   mood=character_mood(npc, flags),
+                  public_facts=public_dialogue_facts(npc, state),
                   relationship="상대는 이 열차에서 처음 만난 승객이며 첫인사는 방금 나눴다. 예전에 만난 적은 없다.")
+
+    if npc == "explorer" and not flags.get("explorer_case_known"):
+        result["known_facts"] = [fact for fact in result["known_facts"]
+                                 if not re.search(r"실종|사라진|사라졌", fact)]
+
     if npc == "cleaner" and not flags.get("elder_features"):
         result["conversation_boundary"] = "커피를 청소하느라 바쁘다. 분실물이나 승차권 이야기를 먼저 꺼내거나 외형 설명을 요구하거나 노인에게 분실물을 물어보라고 안내하지 않는다."
     return result
@@ -217,13 +273,13 @@ _DEFLECTION = re.compile(
 )
 
 
-def approve_free_reply(reply, npc, mode, state):
+def approve_free_reply(reply, npc, mode, state, question=""):
     """Validate speech without changing flags, inventory, pending turns, or history.
 
     This is a final boundary after generation. It rejects a whole unsafe answer
     instead of trimming a clause that could leave a misleading action or hint.
     """
-    fallback = fallback_reply(npc, mode)
+    fallback = fallback_reply(npc, mode, question, state)
     if mode == "confusion":
         return confusion_reply(npc)
     if mode not in FREE_DIALOGUE_MODES or not isinstance(reply, str):
@@ -234,20 +290,37 @@ def approve_free_reply(reply, npc, mode, state):
     if (npc == "cleaner" and not state.get("flags", {}).get("elder_features")
             and re.search(r"분실|승차권|잃어버|물건.{0,20}(?:모양|특징|외형)|(?:모양|특징|외형).{0,20}(?:설명|말씀)", value)):
         return "손님, 지금은 커피를 닦느라 바쁘답니다. 바닥이 젖었으니 잠시 비켜 주시겠어요?"
+
+    # Exact earned facts may be repeated, while every surrounding clause still
+    # passes the existing output guard. Unlocking a noun never unlocks arbitrary
+    # claims about that noun, a different station, an item handover, or a grant.
+    checked = value
+    for fact in sorted(public_dialogue_facts(npc, state), key=lambda row: len(row["text"]), reverse=True):
+        checked = checked.replace(fact["text"], " ")
+    checked = re.sub(r"(?:문을\s*열|(?:열차를|운행을)\s*멈출)\s*수\s*없(?:습니다|어요|네)[.!?]?", "", checked)
+    uncertain = r"(?:누가|청소원이).{0,40}(?:가져갔|줬|주었).{0,35}(?:모르|못\s*봐|못\s*봤|못해서|못\s*했|보지\s*못|못\s*보|단정할\s*수\s*없)"
+    checked = re.sub(uncertain, "", checked)
+    if re.search(r"(?:청소원|그\s*사람).{0,30}(?:훔|가져간\s*게\s*확실|가져갔|범인)|(?:도구|신문|손전등|표|물건).{0,25}(?:줬|주었|건넸)|(?:열차|운행).{0,20}(?:멈추게.{0,15}(?:해\s*두|해뒀)|멈출\s*수\s*있)", checked):
+        return fallback
+    if npc == "explorer" and not state.get("flags", {}).get("explorer_case_known") and re.search(r"실종|사라진\s*열차|열차.{0,20}사라졌", checked):
+        return fallback
+
     # Quotation marks are harmless; markdown, lists, stage directions, and speaker
     # role labels would turn an NPC response into narration or instructions.
     if re.search(r"(?:^|\n)\s*(?:#{1,6}\s|[-*]\s|\d+[.)]\s|(?:assistant|system|user|narrator)\s*:)|[{}\[\]<>]|\*\*", value, re.I):
         return fallback
-    if _META.search(value) or _REPLY_SCENARIO_SUBJECT.search(value) or _STATE_CLAIM.search(value):
+    if _META.search(checked) or _REPLY_SCENARIO_SUBJECT.search(checked) or _STATE_CLAIM.search(checked):
         return fallback
     # Everyone meets the passenger for the first time on this train.
     if _REUNION.search(value):
         return fallback
+    if re.search(r"어릴.{0,12}알고.{0,12}지낸|예전부터.{0,12}친구", value):
+        return fallback
     # '승객을 목적지까지 안전하게 돕는 일' is ordinary career talk. Claims
     # identifying that destination, named stations, and the elder's hints remain
     # reserved for condition-checked dialogue, including user-supplied names.
-    destination_text = re.sub(r"목적지(?:까지|로|에)", "", value)
-    if "목적지" in destination_text or _DESTINATION_DISCLOSURE.search(value):
+    destination_text = re.sub(r"목적지(?:까지|로|에)", "", checked)
+    if "목적지" in destination_text or _DESTINATION_DISCLOSURE.search(checked):
         return fallback
     handover_text = re.sub(r"(?:말씀|인사|안내|설명|답변|대답|감사|도움|알려)\s*드(?:릴게요|리겠습니다|렸습니다|립니다)", "", value)
     if re.search(r"건네(?:드|겠|줄|받)|드릴게요|드리겠습니다|드렸습니다|주겠습니다|줄게요|드립니다|가져가(?:세요|셔|도)", handover_text):
@@ -262,7 +335,7 @@ def approve_free_reply(reply, npc, mode, state):
         return fallback
     if re.search(r"\d", value) and re.search(r"태어|출생|생일", value):
         return fallback
-    numeric_text = value
+    numeric_text = checked
     allowed_years = {str(_recognized_year(npc, state))}
     if npc == "explorer":
         allowed_years.add("2016")

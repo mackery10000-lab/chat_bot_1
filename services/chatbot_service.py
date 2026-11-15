@@ -18,8 +18,9 @@ from .retriever import DemoRetriever
 from .character_dialogue import character_mood, character_reply, courteous_reaction
 from .dialogue_policy import (
     FREE_DIALOGUE_MODES, approve_free_reply, fallback_reply,
-    free_dialogue_context, is_setting_attack,
+    free_dialogue_context, is_setting_attack, public_dialogue_facts,
 )
+from .dialogue_routing import choice_semantics, answer_expectation, resolve_dialogue_route
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 # 승무원의 '무슨 이상을 보셨습니까?'에 대한 관찰 답. 정차 요구('멈춰 주세요')와 달리 현상 서술이다.
@@ -274,12 +275,21 @@ class GameEngine:
 
     def context(self, s):
         previous = next((h for h in reversed(s["history"])
-                         if h.get("role") == "npc" and h.get("npc") == s["npc"]), {})
+                         if (h.get("role") == "npc" and h.get("npc") == s["npc"])
+                         or h.get("role") == "narrator"), {})
+        choices = [{"id": o["id"], "label": o["label"],
+                    "semantic": choice_semantics(s["npc"], self._scenario_stage(s, s["npc"]), o["scenario"])}
+                   for o in self._scenario_options(s)]
+        last_mode = "non_mutating" if previous.get("role") == "narrator" else previous.get("dialogue_mode", "scenario")
         return {
             "location": LOCATIONS[s["location"]],
             "active_npc": s["npc"],
-            "last_dialogue_mode": previous.get("dialogue_mode", "scenario"),
-            "dialogue_choices": [{"id": o["id"], "label": o["label"]} for o in self._scenario_options(s)],
+            "last_dialogue_mode": last_mode,
+            "dialogue_stage": self._scenario_stage(s, s["npc"]) if s["npc"] else "",
+            "dialogue_choices": choices,
+            "answer_expectation": answer_expectation(s["npc"], self._scenario_stage(s, s["npc"]),
+                                                     s["pending_dialogue"], last_mode, choices),
+            "public_facts": public_dialogue_facts(s["npc"], s),
             "visible_npcs": [
                 {"id": x, "name": self.config["npcs"][x]["name"]}
                 for x in self.available_npcs(s)
@@ -554,6 +564,11 @@ class GameEngine:
                 and self._awaiting_anomaly(s) and re.search(ANOMALY_OBSERVATION, intent.get("quote", ""))):
             # '무슨 이상을 봤냐'는 질문에 '열차가 안 멈춘다'고 답하면 반복 관찰을 말한 것이다.
             topic = "loop"
+        if npc == "explorer" and topic == "background" and not f.get("explorer_case_known"):
+            # His authored background discloses the incident. Disclosure and its
+            # newspaper must remain one authoritative event in either channel.
+            self.mark(s, "explorer_case_known", "탐험가는 2016년 실종된 13-Fri를 조사해 왔다.")
+            self.give(s, "newspaper")
         profile_reply = character_reply(npc, topic)
         if profile_reply:
             line, facts = profile_reply
@@ -562,11 +577,13 @@ class GameEngine:
                 questions[topic] = questions.get(topic, 0) + 1
                 if questions[topic] >= 3:
                     line += " 커피를 마저 닦아야 하니 잠시 옆으로 비켜 주시겠어요? 필요한 말씀은 계속 듣겠습니다."
-            return self.result(line, npc, facts)
+            return self.result(line, npc, facts, ui={"dialogue_mode": "non_mutating"})
         if npc == "explorer":
             self.mark(s, "explorer_met")
             if topic in ("greeting", "other") and intent["intent"] != "accept":
                 return self.result("안녕하세요. 저는 이 열차를 조사하러 온 탐험가예요. 이런 곳에서 사람을 만나다니, 반갑네요. 당신은 여기에 왜 있죠?", npc)
+            if topic == "stop":
+                return self.result("멈추고 싶은 마음은 저도 같아요. 하지만 정차 방법은 알지 못해요. 승무원이나 기관사에게 물어보시겠어요?", npc)
             if not f.get("explorer_case_known") and topic in ("identity", "case", "loop", "destination", "year"):
                 self.mark(
                     s, "explorer_case_known", "탐험가는 2016년 실종된 13-Fri를 조사해 왔다."
@@ -622,8 +639,6 @@ class GameEngine:
                 )
                 self.give(s, "newspaper")
                 prefix = "저는 10년 전 2016년 23시 59분에 실종된 13-Fri를 오래 조사했어요. 2026년에 같은 열차가 다시 나타나서 순전히 궁금해서 탔거든요. 자료 사진이 있는 이 신문을 가져가세요. "
-            if topic == "stop":
-                prefix = "멈추고 싶은 마음은 저도 같아요. 그런데 이 열차는 그냥 세울 수 있는 상태가 아닌 것 같거든요. " + prefix
             s["pending_dialogue"] = "explorer_tools"
             return self.result(
                 (prefix + "앞쪽을 조사해 보시겠어요?")
@@ -850,12 +865,17 @@ class GameEngine:
             if topic == "restroom":
                 return self.result(
                     "화장실에 가시려는 거군요. 이동하실 때는 객차가 흔들릴 수 있으니 손잡이를 잡고 조심해 주십시오.",
-                    npc,
+
+                    npc, ui={"dialogue_mode": "non_mutating"},
+
                 )
             if topic == "year":
                 year = "2026년이라고요…? 저는 2016년에 근무를 시작했습니다. 믿기 어렵습니다." if "2026" in intent.get("quote", "") else "2016년입니다. 출발할 때도 그렇게 확인했습니다."
                 permission = " 약속대로 기관실 출입을 도와드리겠습니다." if f.get("engine_permission") else ""
-                return self.result(year + " 제 시계는 계속 23시 59분입니다." + permission, npc, ["attendant_rule"])
+
+                return self.result(year + " 제 시계는 계속 23시 59분입니다." + permission, npc, ["attendant_rule"],
+                                   ui={"dialogue_mode": "non_mutating"})
+
             if f.get("engine_permission"):
                 return self.result(
                     "도와주셔서 감사합니다. 약속대로 기관실 문을 열어두었습니다. 조심해서 들어가십시오.",
@@ -918,6 +938,15 @@ class GameEngine:
             )
         if npc == "driver":
             if f.get("year_proven"):
+                if topic in ("stop", "loop", "destination", "password"):
+                    facts = {row["id"]: row["text"] for row in public_dialogue_facts(npc, s)}
+                    key = {"stop": "driver_cause", "loop": "driver_cause",
+                           "destination": "driver_destination", "password": "driver_lock"}[topic]
+                    if key in facts:
+                        line = "현재가 2026년이라는 것은 확인했습니다. " + facts[key]
+                        if topic == "stop":
+                            line = "멈추는 것만으로는 해결되지 않습니다. " + line
+                        return self.result(line, npc, ["driver_accept"])
                 accepted = "10년이나 흘렀다는 겁니까"
                 if any(accepted in (h.get("record") or h.get("text", ""))
                        for h in s["history"] if h.get("npc") == "driver"):
@@ -1417,7 +1446,10 @@ class GameEngine:
         else:
             result = self.result("", npc, ui={"non_progress": True})
         s.setdefault("scenario_steps", {})[npc] = turn["next"]
-        if turn.get("response") is not None:
+        keep_causal_answer = (npc == "driver" and kind == "talk"
+                              and effect.get("topic") in ("stop", "loop")
+                              and s["flags"].get("report_read"))
+        if turn.get("response") is not None and not keep_causal_answer:
             result["canonical"] = turn["response"]
             result["npc"] = "" if turn.get("narration") else npc
         result["player_line"] = turn["label"]
@@ -1624,7 +1656,10 @@ class GameEngine:
         """
         if s["npc"] != "elder" or "elder" not in self.available_npcs(s):
             return None
-        if i.get("intent") not in ("talk", "accept", "unknown") or i.get("mode") in ("hypothesis", "reported"):
+        if (i.get("intent") not in ("talk", "accept", "unknown")
+                or i.get("mode") in ("negated", "hypothesis", "reported", "unclear")
+                or i.get("dialogue_mode") == "confusion"
+                or i.get("target") not in ("", "elder")):
             return None
         last = next((h for h in reversed(s["history"])
                      if h.get("role") == "npc" and h.get("npc") == "elder"), None)
@@ -1654,12 +1689,38 @@ class GameEngine:
         self.mark(s, "elder_met")
         return self.result(line, "elder", ["elder_lost"])
 
+    def nonexecuting_reply(self, s, i):
+        """Answer in character without consuming a pending story obligation."""
+        npc = s["npc"]
+        if npc not in self.available_npcs(s):
+            return self.result("의도와 대상을 확인하지 못했다. 지금 직접 하려는 행동을 명확히 말해 주세요.")
+        mode = i.get("mode")
+        if npc == "cleaner" and not s["flags"].get("elder_features"):
+            line = "손님, 지금은 커피를 닦느라 바쁘답니다. 바닥이 젖었으니 잠시 비켜 주시겠어요?"
+        elif npc == "explorer" and mode == "negated":
+            line = "괜찮아요. 직접 조사하실 생각이 드시면 말씀해 주세요."
+        elif mode == "hypothesis":
+            line = {"explorer": "가정해서 물으시는 거군요. 직접 하시려는 뜻인지 알려주시겠어요?",
+                    "elder": "아이고, 가정해서 하는 말인가? 자네가 지금 하려는 일을 말해주게.",
+                    "cleaner": "손님, 지금 찾으시는 물건을 직접 설명하시는 뜻인지 확인해 주시겠어요?",
+                    "attendant": "아직 부탁을 수락하신 것으로 이해하지 않겠습니다. 직접 도와주시려는 뜻이면 말씀해 주십시오.",
+                    "driver": "가정만으로 판단할 수는 없습니다. 직접 하시려는 뜻을 말씀하십시오."}[npc]
+        else:
+            line = {"explorer": "지금 직접 하시려는 뜻인지 조금 더 설명해 주시겠어요?",
+                    "elder": "아이고, 자네가 지금 하려는 말을 천천히 다시 해주게.",
+                    "cleaner": "손님, 무슨 뜻인지 다시 말씀해 주시겠어요?",
+                    "attendant": "직접 요청하시는 내용을 분명히 말씀해 주십시오.",
+                    "driver": "말씀만으로 확인할 수 없습니다. 용건을 분명히 말씀하십시오."}[npc]
+        return self.result(line, npc, ui={"non_progress": True,
+                           "dialogue_mode": "clarification" if mode == "unclear" else "non_mutating"})
+
     def apply_intent(self, s, i):
         trip = self._answer_elder_trip_question(s, i)
         if trip:
             return trip
         f = s["flags"]
-        if (s["npc"] == "driver" and s["location"] == "engine" and f.get("report_read")
+        if (i.get("dialogue_mode") != "confusion"
+                and s["npc"] == "driver" and s["location"] == "engine" and f.get("report_read")
                 and not f.get("year_proven") and not f.get("year_claimed")
                 and i.get("intent") in ("talk", "accept", "unknown", "impossible")
                 and i.get("mode") not in ("negated", "hypothesis", "reported")
@@ -1667,7 +1728,9 @@ class GameEngine:
             # '지금은 2026년이에요' 같은 주장은 자유 대화나 비밀번호 질문으로 새지 않게 한다.
             i = dict(i, intent="talk", target="driver", recipient="", topic="year", mode="act",
                      dialogue_mode="scenario", dialogue_choice_id="")
-        if (self._awaiting_anomaly(s) and i.get("mode") not in ("negated", "hypothesis", "reported")
+        if (i.get("dialogue_mode") != "confusion"
+                and self._awaiting_anomaly(s) and i.get("mode") not in ("negated", "hypothesis", "reported")
+                and not i.get("dialogue_choice_id")
                 and i.get("intent") in ("talk", "accept", "unknown", "describe", "impossible", "ambient")
                 and re.search(ANOMALY_OBSERVATION, i.get("quote", ""))):
             # 이상 현상 질문에 대한 관찰 답('열차가 안 멈춰요')은 자유 대화나 정차 요구로 새지 않게 한다.
@@ -1709,9 +1772,7 @@ class GameEngine:
         if mode in ("negated", "reported", "hypothesis", "unclear"):
             if kind == "describe" and mode == "unclear" and s["npc"] == "cleaner":
                 return self.talk(s, "cleaner", "appearance", i)
-            return self.result(
-                "실제 행동이 확정되지 않아 진행은 그대로다. 지금 직접 하려는 행동이나 묻고 싶은 내용을 명확하게 말해 주세요."
-            )
+            return self.nonexecuting_reply(s, i)
         if kind == "talk" or kind == "describe" or kind == "accept":
             npc = (
                 target
@@ -1739,7 +1800,7 @@ class GameEngine:
                 option = next((o for o in self._scenario_options(s) if o["id"] == choice_id), None)
                 if option is None:
                     raise GameError("현재 대화에서 가능한 답변을 확인해 주세요.", "stale_choice", 409)
-                result = self._choose_scenario(s, option)
+                result = self.choose(s, s["location"] + "." + option["id"])
             else:
                 result = self.talk(s, npc, i["topic"], i)
             if result["npc"] == npc:
@@ -1790,6 +1851,8 @@ class GameEngine:
                 "달리는 열차 안에서 위험한 행동을 시도해도 문제는 해결되지 않는다. 시설은 파괴되지 않았고 진행은 그대로다."
             )
         if kind == "impossible":
+            if s["npc"] in self.available_npcs(s):
+                return self.nonexecuting_reply(s, i)
             return self.result("", ui={"ignored": True})
         if kind == "ambient":
             if i.get("behavior") == "sit" and s["location"] in ("car_1", "car_2", "car_3", "car_4"):
@@ -1906,9 +1969,14 @@ class GameEngine:
             ],
             "objective": self.objective(s),
             "confirmation": deepcopy(s["confirmation"]),
-            "testimony_hint": (
-                loc == "car_3" and s["npc"] == "cleaner"
-                and s["pending_dialogue"] in ("describe_ticket", "confirm_description")
+            "testimony_hint": bool(
+                s["status"] == "playing" and loc == "car_3" and s["npc"] == "cleaner"
+                and f.get("light_on") and f.get("elder_features")
+                # Returning from the elder restores the authored description
+                # stage while deliberately clearing the short-answer obligation.
+                # Derive the visual hint from either context without changing it.
+                and (s["pending_dialogue"] in ("describe_ticket", "confirm_description")
+                     or self._scenario_stage(s, "cleaner") == "describe")
                 and not f.get("ticket_recovered") and "elder_testimony" in s["inventory"]
             ),
             "bag_hint": (loc == "car_3" and not f.get("light_on"))
@@ -2037,8 +2105,12 @@ class ChatbotService:
                           else self.generator.interpret(message, context))
                 intent = ground_free_continuation(intent, message, context)
                 intent = ground_scenario_choice(intent, message, context)
+                intent = ground_cleaner_description(intent, message, context)
+                route = resolve_dialogue_route(intent, message, context)
+                if route.rejection_reason:
+                    raise GameError("현재 대화에서 가능한 답변을 확인해 주세요.", route.rejection_reason, 409)
+                intent = route.validated_intent
                 if intent.get("dialogue_mode") not in FREE_DIALOGUE_MODES:
-                    intent = ground_cleaner_description(intent, message, context)
                     if intent.get("intent") == "describe":
                         intent = grounded_features(intent, message, context)
                 result = self.engine.apply_intent(s, intent)
@@ -2059,7 +2131,7 @@ class ChatbotService:
                 }
                 if dialogue_mode != "confusion":
                     reply = self.generator.generate(message, s["username"], character, [])
-                reply = approve_free_reply(reply, npc, dialogue_mode, s)
+                reply = approve_free_reply(reply, npc, dialogue_mode, s, question=message)
                 canonical = reply
                 sources = ["인물 설정"] if dialogue_mode == "lore" else []
             elif npc and action is None and not result["ui"].get("non_progress") and not result["ui"].get("scripted"):
@@ -2112,7 +2184,7 @@ class ChatbotService:
                     "npc": npc,
                     "text": reply,
                     "record": canonical if npc and canonical != reply else "",
-                    "dialogue_mode": dialogue_mode or "scenario",
+                    "dialogue_mode": dialogue_mode or result["ui"].get("dialogue_mode", "scenario"),
                 })
             # Archive only the overflow for the UI; scenario logic and model
             # context continue using the same recent 240 entries as before.

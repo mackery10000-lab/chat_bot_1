@@ -24,7 +24,12 @@ class CharacterDialogueTest(GameTestCase):
         self.t("explorer", "background")
         for text in ("탐험가", "2016", "2026", "궁금해서", "신나는"):
             self.assertIn(text, self.data["reply"])
-        self.assertEqual(before, self.stable_progress())
+        # Incident disclosure and the newspaper are now one server event,
+        # including when the question was classified as character background.
+        self.assertIn("newspaper", self.items())
+        self.assertTrue(self.flags()["explorer_case_known"])
+        self.assertFalse(self.flags().get("supplies_received"))
+        before = self.stable_progress()
         self.t("explorer", "injury")
         self.assertIn("낡은 바닥이 무너져", self.data["reply"])
         self.assertIn("2호차", self.data["reply"])
@@ -225,6 +230,9 @@ class PlaytestFeedbackTest(GameTestCase):
         self.assertNotIn("newspaper", self.items())
         self.t("explorer", "stop")
         self.assertIn("멈추고 싶은 마음", self.data["reply"])
+        self.assertNotIn("newspaper", self.items())
+        self.assertFalse(self.flags().get("explorer_case_known"))
+        self.t("explorer", "case")
         self.assertIn("신문", self.data["reply"])
         self.assertIn("newspaper", self.items())
         self.assertTrue(self.flags()["explorer_case_known"])
