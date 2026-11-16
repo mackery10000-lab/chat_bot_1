@@ -25,7 +25,7 @@ app = Flask(
     static_url_path=None if IS_VERCEL else "",
 )
 app.config["MAX_CONTENT_LENGTH"] = 16384
-chatbot = ChatbotService()
+chatbot = ChatbotService(db_path="/tmp/train_state.sqlite3")
 COOKIE = "train_game"
 loading_lore = LoadingLoreService()
 
